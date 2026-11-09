@@ -7,6 +7,39 @@ import * as THREE from 'three'
 // rim, a sheen that moves with the viewing angle, and a pointer lens that
 // clears the smoke, magnifies and splits colour along its edges.
 
+// TV static shared by the CRT screen and its bright-patch portal, so the two
+// match exactly where they meet. q is a point on the screen in TV units.
+export const STATIC_GLSL = /* glsl */ `
+  float tvHash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+  float tvStatic(vec2 q, float t) {
+    float frame = mod(floor(t * 24.0), 61.0);
+    float n = tvHash(floor(q * 64.0) + frame * vec2(17.13, 31.71));
+    float line = tvHash(vec2(floor(q.y * 64.0), frame * 3.1));
+    return mix(n, line, 0.3);
+  }
+  // Scanlines, a slow rolling bar and the darkened corners of the tube.
+  // How far the grain is magnified: 0 at normal size, 1 once a grain cell
+  // spans many pixels. Close up, the grain and scanlines smooth out.
+  float tvZoom(vec2 q) {
+    float cellPx = (1.0 / 64.0) / max(fwidth(q.x), 1e-6);
+    return smoothstep(3.0, 16.0, cellPx);
+  }
+  float tvShade(vec2 q, float t, vec2 halfSize, float zoom) {
+    vec2 e = abs(q) / halfSize;
+    float d = pow(pow(e.x, 4.0) + pow(e.y, 4.0), 0.25);
+    float vig = 1.0 - 0.6 * smoothstep(0.55, 1.05, d);
+    float roll = 0.92 + 0.08 * smoothstep(0.6, 1.0, sin(q.y * 1.7 - t * 1.6));
+    return (0.84 + 0.16 * mix(sin(q.y * 220.0), 1.0, zoom)) * roll * vig;
+  }
+  vec3 tvPatch(float n) {
+    return vec3(1.0, 0.985, 0.95) * (0.86 + 0.14 * n);
+  }
+`
+
 const vertexShader = /* glsl */ `
   uniform vec2 uHalf;
   varying vec2 vLocal;
@@ -17,6 +50,7 @@ const vertexShader = /* glsl */ `
 `
 
 const fragmentShader = /* glsl */ `
+  ${STATIC_GLSL}
   uniform sampler2D tScene;
   uniform float uHasScene;
   uniform vec2 uRes;
@@ -32,7 +66,11 @@ const fragmentShader = /* glsl */ `
   uniform vec2 uGlint;
   uniform float uFade;
   uniform float uTime;
-  uniform float uIris;
+  uniform float uStatic;
+  uniform vec2 uSpot;
+  uniform float uSpotR;
+  uniform vec2 uScreenHalf;
+  uniform float uPower;
   varying vec2 vLocal;
 
   void main() {
@@ -69,26 +107,16 @@ const fragmentShader = /* glsl */ `
     col *= 1.0 - 0.3 * smoothstep(0.45, 1.0, e) * uFade * uRim;
     col = mix(col, uRimColor, smoothstep(0.93, 1.0, e) * 0.35 * uRim * uFade);
 
-    // Iris diaphragm: nine blades whose opening is a regular polygon.
-    if (uIris > 0.001 && uShape < 0.5) {
-      const float N = 9.0;
-      const float SECTOR = 6.2831853 / N;
-      float r = mix(1.03, 0.07, uIris);
-      float rot = uIris * 1.7;
-      float a = atan(L.y, L.x) - rot;
-      float k = floor(a / SECTOR + 0.5);
-      float phi = rot + k * SECTOR;
-      float outside = dot(L, vec2(cos(phi), sin(phi))) - r;
-      float blade = smoothstep(-0.003, 0.003, outside);
-      // Seams curve outward from the polygon's corners, like overlapping blades.
-      float tw = (a + (length(L) - r) * 1.9) / SECTOR;
-      float s = fract(tw);
-      float id = mod(floor(tw), 2.0);
-      vec3 metal = mix(vec3(0.006, 0.007, 0.009), vec3(0.04, 0.043, 0.05), s) * (0.8 + 0.3 * id);
-      metal += vec3(0.5, 0.52, 0.56) * smoothstep(0.025, 0.0, s) * 0.1;
-      metal += vec3(0.75, 0.78, 0.85) * smoothstep(0.035, 0.0, outside) * blade * 0.55;
-      metal *= 1.0 - 0.35 * smoothstep(0.6, 1.0, length(L));
-      col = mix(col, metal, blade);
+    // The CRT's bright patch: the same static as the screen around it,
+    // so the aperture edge disappears into the picture until the camera is close.
+    if (uStatic > 0.5) {
+      vec2 q = uSpot + L * uSpotR;
+      float zoom = tvZoom(q);
+      float n = mix(tvStatic(q, uTime), 0.5, zoom);
+      vec3 patchCol = tvPatch(n) * tvShade(q, uTime, uScreenHalf, zoom);
+      float amt = uFade * (1.0 - lens) * mix(0.8, 1.0, smoothstep(0.3, 1.0, e));
+      col = mix(col, patchCol, amt);
+      col = mix(vec3(0.018, 0.02, 0.024), col, uPower);
     }
 
     // Sheen bands slide across the glass as the viewing angle changes.
@@ -123,7 +151,7 @@ export function roundedRectShape(w, h, r) {
 
 /**
  * @param {{shape:'circle'|'rect', radius?:number, width?:number, height?:number, corner?:number,
- *          smoke?:number, tint?:string, rim?:number, rimColor?:string, sheen?:number}} o
+ *          smoke?:number, tint?:string, rim?:number, rimColor?:string, sheen?:number, static?:boolean}} o
  */
 export function createPortal(o) {
   const circle = o.shape === 'circle'
@@ -149,7 +177,11 @@ export function createPortal(o) {
     uGlint: { value: new THREE.Vector2() },
     uFade: { value: 1 },
     uTime: { value: 0 },
-    uIris: { value: 0 },
+    uStatic: { value: o.static ? 1 : 0 },
+    uSpot: { value: new THREE.Vector2() },
+    uSpotR: { value: 1 },
+    uScreenHalf: { value: new THREE.Vector2(1, 1) },
+    uPower: { value: 1 },
   }
   const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader })
   const mesh = new THREE.Mesh(geometry, material)

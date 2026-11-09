@@ -158,7 +158,6 @@ export async function start() {
 
   let g = progressFor(window.scrollY)
   let last = performance.now()
-  const startTime = last
   const cursorPos = { x: -100, y: -100 }
   const SCENES = ['00 · Intro', '01 · SyncDocs', '02 · Clipboard Sync', '03 · Final Transmission', '04 · Still Pavilion']
   const ACTIONS = [null, 'Click · write a line', 'Click · copy', 'Move · turn the planet', 'Move · change the light']
@@ -263,11 +262,13 @@ export async function start() {
 
     /* Portal uniforms. */
     const pr = renderer.getPixelRatio()
-    const sceneCtx = { active: false, pointer, dt, rawDt, clicks: 0 }
+    const ndc = new THREE.Vector2((pointer.px / vw) * 2 - 1, -(pointer.py / vh) * 2 + 1)
+    const sceneCtx = { active: false, pointer, ndc, inside: pointer.inside, camera: null, dt, rawDt, clicks: 0 }
     for (let j = 0; j <= depth; j++) {
       const w = worlds[world + j]
       sceneCtx.active = j === 0 && aboutTopNow > vh * 0.3
       sceneCtx.clicks = sceneCtx.active ? clicks : 0
+      sceneCtx.camera = cams[world + j]
       w.tick(time, sceneCtx)
       if (!w.portal) continue
       const u = w.portal.uniforms
@@ -296,18 +297,9 @@ export async function start() {
         u.uPointer.value.set(pointer.px * pr, (vh - pointer.py) * pr)
         u.uPointerR.value = THREE.MathUtils.clamp(rpx * 0.5, 90, 240) * pr
         lensHover = u.uHover.value
+        if (world === 0) state.spot = [cx, cy]
       } else {
         u.uHover.value = 0
-      }
-      // The instrument's aperture opens on load, dilates under the pointer and
-      // opens fully as the camera dives in.
-      if (world + j === 0) {
-        const intro = smooth(0.2, 2.2, (now - startTime) / 1000)
-        const closed = THREE.MathUtils.lerp(1, 0.6, intro)
-        const iris = closed * (1 - 0.88 * (j === 0 ? u.uHover.value : 0)) * (1 - smooth(0.55, 1.3, g))
-        u.uIris.value = iris + Math.sin(time * 1.3) * 0.012 * iris
-      } else {
-        u.uIris.value = 0
       }
     }
 
@@ -361,8 +353,8 @@ export async function start() {
       const onCard = !!over?.closest('.card, .masthead, .about')
       let label = ''
       if (onLink) label = ''
-      else if (lensHover > 0.35) label = 'Aperture open'
-      else if (current === 0 && raw < 0.9) label = ''
+      else if (lensHover > 0.35) label = 'Peek through'
+      else if (current === 0 && raw < 0.9) label = world === 0 ? worlds[0].state.hint : ''
       else if (!onCard && current >= 1 && current <= 4 && Math.abs(raw - Math.round(raw / 2) * 2) < 0.95) label = ACTIONS[current]
       cursor.classList.toggle('is-link', onLink)
       cursor.classList.toggle('is-lens', !onLink && lensHover > 0.35)
@@ -382,6 +374,7 @@ export async function start() {
   // Read-only hook for automated checks.
   window.__journey = {
     state,
+    hero: () => ({ ...worlds[0].state, hover: worlds[0].portal.uniforms.uHover.value }),
     bounds: () => bounds.slice(),
     camera: () => ({ world: state.world, position: cams[state.world].position.toArray(), quaternion: cams[state.world].quaternion.toArray() }),
     // Where each transit's path crosses its portal plane, in portal half-sizes.

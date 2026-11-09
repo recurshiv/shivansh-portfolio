@@ -36,13 +36,13 @@ const scrollG = async (g) => {
 }
 const shot = async (name) => { const f = `${OUT}/${name}.png`; await p.screenshot({ path: f }); return f }
 
-// 1. Look around: pointer left / right of the hero changes the view of the instrument.
+// 1. Look around: pointer left / right of the hero changes the view of the TV.
 await scrollG(0)
-const inst = { left: 760, top: 60, width: 640, height: 760 }
-await p.mouse.move(80, 450, { steps: 4 }); await p.waitForTimeout(2200); const L = await shot('look-left')
-await p.mouse.move(1360, 450, { steps: 8 }); await p.waitForTimeout(2200); const R = await shot('look-right')
-const dLook = await diff(L, R, inst)
-check('pointer shifts the viewing angle of the instrument', dLook > 3, `mean diff ${dLook.toFixed(2)}`)
+// The static animates, so this compares the camera pose rather than pixels.
+await p.mouse.move(80, 450, { steps: 4 }); await p.waitForTimeout(2200); const L = await shot('look-left'); const camL = await p.evaluate(() => window.__journey.camera())
+await p.mouse.move(1360, 450, { steps: 8 }); await p.waitForTimeout(2200); const R = await shot('look-right'); const camR = await p.evaluate(() => window.__journey.camera())
+const dLook = Math.hypot(...camL.position.map((v, i) => v - camR.position[i]))
+check('pointer shifts the viewing angle of the TV', dLook > 0.3, `camera moved ${dLook.toFixed(2)} units`)
 // Hero text stays put (HTML, not part of the scene).
 const dText = await diff(L, R, { left: 60, top: 280, width: 560, height: 380 })
 check('hero text is unaffected by the look-around', dText < 0.5, `mean diff ${dText.toFixed(2)}`)
@@ -57,17 +57,23 @@ const untouched = await p.evaluate(() => window.__journey.camera())
 const dBack = Math.hypot(...released.position.map((v, i) => v - untouched.position[i]), ...released.quaternion.map((v, i) => v - untouched.quaternion[i]))
 check('view eases back to centre after the pointer leaves', dBack < 1e-3, `pose Δ vs untouched ${dBack.toExponential(1)}`)
 
-// 2. Refraction lens: pointer on the glass vs beside the instrument.
-const glass = { left: 900, top: 230, width: 330, height: 380 }
-await p.mouse.move(1060, 420, { steps: 6 }); await p.waitForTimeout(2200); const G1 = await shot('lens-on')
-await p.mouse.move(700, 820, { steps: 6 }); await p.waitForTimeout(2200); const G0 = await shot('lens-off')
-const dLensGlass = await diff(G1, G0, glass)
-check('pointer on the glass refracts the scene behind it', dLensGlass > 2, `mean diff in glass ${dLensGlass.toFixed(2)}`)
+// 2. TV screen: the pointer bends the static, a click degausses, the bright patch can be peeked through.
+const hero = () => p.evaluate(() => window.__journey.hero())
+await p.mouse.move(980, 500, { steps: 6 }); await p.waitForTimeout(1500)
+const onScreen = await hero()
+check('pointer on the TV screen bends the static', onScreen.mag > 0.8, `magnet ${onScreen.mag.toFixed(2)}`)
+await p.mouse.click(980, 500); await p.waitForTimeout(150)
+const clicked = await hero()
+check('a click degausses the tube and turns the channel dial', clicked.channel === onScreen.channel + 1 && clicked.degauss > 0.05, `channel ${onScreen.channel}→${clicked.channel}, degauss ${clicked.degauss.toFixed(2)}`)
+const [sx, sy] = await p.evaluate(() => window.__journey.state.spot)
+await p.mouse.move(sx, sy, { steps: 6 }); await p.waitForTimeout(2200); const G1 = await shot('peek-on')
+const peek = await hero()
+check('hovering the bright patch opens a peek through it', peek.hover > 0.8, `hover ${peek.hover.toFixed(2)}`)
+await p.mouse.move(700, 820, { steps: 6 }); await p.waitForTimeout(2200); const G0 = await shot('peek-off')
+const off = await hero()
+check('moving away closes the peek and releases the magnet', off.hover < 0.1 && off.mag < 0.1, `hover ${off.hover.toFixed(2)}, magnet ${off.mag.toFixed(2)}`)
 const dLensText = await diff(G1, G0, { left: 60, top: 280, width: 560, height: 380 })
-check('refraction leaves the text crisp', dLensText < 0.5, `mean diff in text ${dLensText.toFixed(2)}`)
-
-// 2b. Aperture: the iris is closed-ish at rest and opens under the pointer.
-check('aperture iris opens under the pointer', dLensGlass > 8, `mean diff ${dLensGlass.toFixed(2)}`)
+check('the screen effects leave the text crisp', dLensText < 0.5, `mean diff in text ${dLensText.toFixed(2)}`)
 
 // 2c. Scene interactions.
 {

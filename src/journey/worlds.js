@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { createPortal, roundedRectShape } from './portal.js'
+import { createPortal, roundedRectShape, STATIC_GLSL } from './portal.js'
 import {
   canvasTexture,
   imageTexture,
@@ -33,214 +33,375 @@ function envFor(renderer) {
   return env
 }
 
-function lathe(points, segments = 160) {
-  return new THREE.LatheGeometry(
-    points.map(([r, z]) => new THREE.Vector2(r, z)),
-    segments,
-  ).rotateX(Math.PI / 2)
-}
+/* ------------------------------------------------------------------ */
+/* World 0: the vintage CRT                                             */
+/* ------------------------------------------------------------------ */
 
-function ringInstances(count, geometry, material, place) {
-  const mesh = new THREE.InstancedMesh(geometry, material, count)
-  const m = new THREE.Object3D()
-  for (let i = 0; i < count; i++) {
-    place(m, i)
-    m.updateMatrix()
-    mesh.setMatrixAt(i, m.matrix)
+const screenVertex = /* glsl */ `
+  varying vec2 vPos;
+  void main() {
+    vPos = position.xy;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
-  return mesh
+`
+
+const screenFragment = /* glsl */ `
+  ${STATIC_GLSL}
+  uniform float uTime;
+  uniform float uOn;
+  uniform float uMagOn;
+  uniform float uDegauss;
+  uniform vec2 uHalf;
+  uniform vec2 uSpot;
+  uniform float uSpotR;
+  uniform vec2 uMag;
+  varying vec2 vPos;
+
+  void main() {
+    // A magnet held near the tube: the picture swirls and fringes in colour.
+    vec2 dm = vPos - uMag;
+    float md = length(dm);
+    float mf = uMagOn * exp(-md * md * 1.8);
+    float ang = mf * 1.4 + uDegauss * 0.6 * exp(-md * md * 0.3);
+    vec2 q = uMag + mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * dm;
+    q += uDegauss * vec2(sin(vPos.y * 8.0 + uTime * 37.0), cos(vPos.x * 6.0 + uTime * 29.0)) * 0.05;
+
+    float zoom = tvZoom(vPos);
+    float n = mix(tvStatic(q, uTime), 0.5, zoom);
+    vec3 col = vec3(0.012 + 0.42 * n * n);
+
+    // The static thins into a bright patch, which is the way through.
+    float sd = length(vPos - uSpot);
+    float glow = 1.0 - smoothstep(uSpotR * 0.98, uSpotR * 3.4, sd);
+    col = mix(col, tvPatch(n), glow * glow);
+    col *= tvShade(vPos, uTime, uHalf, zoom);
+
+    float a = atan(dm.y, dm.x);
+    vec3 ring = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + a / 6.2831 + md * 1.2 - uTime * 0.25));
+    col = mix(col, col * ring * 1.9, mf * 0.8);
+    vec3 wash = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + vPos.x * 0.25 + vPos.y * 0.15 + uTime * 1.5));
+    col = mix(col, col * wash * 1.8, uDegauss * 0.8);
+
+    // Power on: a bright line opens into the picture.
+    float w = smoothstep(0.0, 0.35, uOn);
+    float h = mix(0.006, 1.0, smoothstep(0.35, 0.8, uOn));
+    float m = step(abs(vPos.x) / uHalf.x, w) * step(abs(vPos.y) / uHalf.y, h);
+    col = mix(vec3(0.018, 0.02, 0.024), col + (1.0 - smoothstep(0.5, 1.0, uOn)) * 0.8, m);
+
+    gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`
+
+function walnutTexture() {
+  const t = canvasTexture(1024, 1024, (c, w, h) => {
+    c.fillStyle = '#4b3122'
+    c.fillRect(0, 0, w, h)
+    let r = 7
+    const rand = () => ((r = (r * 9301 + 49297) % 233280) / 233280)
+    for (let i = 0; i < 520; i++) {
+      const y0 = rand() * h
+      const dark = rand() > 0.5
+      c.strokeStyle = dark ? `rgba(28, 16, 9, ${0.12 + rand() * 0.3})` : `rgba(140, 92, 58, ${0.06 + rand() * 0.16})`
+      c.lineWidth = 0.6 + rand() * 2.6
+      c.beginPath()
+      const amp = 4 + rand() * 18
+      const f = 0.004 + rand() * 0.01
+      const ph = rand() * 6.28
+      for (let x = 0; x <= w; x += 16) {
+        const y = y0 + Math.sin(x * f + ph) * amp + Math.sin(x * f * 3.1 + ph * 2) * amp * 0.25
+        x === 0 ? c.moveTo(x, y) : c.lineTo(x, y)
+      }
+      c.stroke()
+    }
+  })
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(0.17, 0.17)
+  return t
 }
 
-/* ------------------------------------------------------------------ */
-/* World 0: the optical instrument                                      */
-/* ------------------------------------------------------------------ */
+function panelTexture(dials) {
+  return canvasTexture(256, 1000, (c, w, h) => {
+    const g = c.createLinearGradient(0, 0, w, 0)
+    g.addColorStop(0, '#b9bcc1')
+    g.addColorStop(0.5, '#dfe1e4')
+    g.addColorStop(1, '#a9acb2')
+    c.fillStyle = g
+    c.fillRect(0, 0, w, h)
+    for (let y = 0; y < h; y += 2) {
+      c.fillStyle = `rgba(${Math.random() > 0.5 ? '255,255,255' : '40,42,48'}, ${Math.random() * 0.08})`
+      c.fillRect(0, y, w, 1)
+    }
+    c.fillStyle = '#26282d'
+    c.textAlign = 'center'
+    c.textBaseline = 'middle'
+    for (const d of dials) {
+      const cx = w / 2
+      if (d.numbers) {
+        d.numbers.forEach((label, i) => {
+          const a = -Math.PI * 0.8 + (i / (d.numbers.length - 1)) * Math.PI * 1.6
+          c.font = '600 19px "JetBrains Mono", monospace'
+          c.fillText(label, cx + Math.sin(a) * d.r, d.y - Math.cos(a) * d.r)
+        })
+      }
+      c.font = '600 16px "JetBrains Mono", monospace'
+      c.fillText(d.label, cx, d.y + d.r + 34)
+    }
+  })
+}
 
-function buildInstrument(env) {
+function buildCRT(env) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color('#f2ede3')
   scene.environment = env
   scene.environmentIntensity = 0.9
 
-  const key = new THREE.DirectionalLight('#fff6ea', 2.2)
+  const key = new THREE.DirectionalLight('#fff6ea', 2.0)
   key.position.set(-4, 7, 9)
-  scene.add(key, new THREE.AmbientLight('#f4efe6', 0.6))
+  const fill = new THREE.DirectionalLight('#dfe6ff', 0.45)
+  fill.position.set(9, -2, 5)
+  scene.add(key, fill, new THREE.AmbientLight('#f4efe6', 0.6))
 
-  const G = v(3.9, 0.3, 0)
-  const R = 2.45
-  const inst = new THREE.Group()
-  inst.position.copy(G)
-  // Turned a little away from the camera so the barrel shows its depth.
-  inst.rotation.set(-0.04, 0.3, 0)
-  scene.add(inst)
+  const G = v(3.75, 0.45, 0)
+  const tv = new THREE.Group()
+  tv.position.copy(G)
+  // Turned a little away from the camera so the cabinet shows its depth.
+  tv.rotation.set(-0.03, 0.26, 0)
+  scene.add(tv)
 
-  const polished = new THREE.MeshStandardMaterial({ color: '#30333a', metalness: 1, roughness: 0.24 })
-  const satin = new THREE.MeshStandardMaterial({ color: '#53575f', metalness: 0.92, roughness: 0.4 })
-  const bright = new THREE.MeshStandardMaterial({ color: '#d8dbe0', metalness: 1, roughness: 0.16 })
-  const rubber = new THREE.MeshStandardMaterial({ color: '#141519', metalness: 0.2, roughness: 0.75 })
-  const engraving = new THREE.MeshBasicMaterial({ color: '#e9e4da' })
-  const cobalt = new THREE.MeshBasicMaterial({ color: '#2340d6' })
+  const W = 6.2
+  const H = 4.9
+  const SC = new THREE.Vector2(-0.75, 0.15) // screen centre
+  const SW = 4.1
+  const SH = 3.15
 
-  // Front bezel with a chamfered lip.
-  const bezel = new THREE.Mesh(
-    lathe([
-      [R + 0.02, -0.05],
-      [R + 0.02, 0.3],
-      [R + 0.13, 0.42],
-      [3.0, 0.42],
-      [3.13, 0.3],
-      [3.13, -0.28],
-    ]),
-    polished,
+  const wood = new THREE.MeshPhysicalMaterial({ map: walnutTexture(), roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.25 })
+  const black = new THREE.MeshStandardMaterial({ color: '#111216', metalness: 0.2, roughness: 0.35 })
+  const chrome = new THREE.MeshStandardMaterial({ color: '#d8dbe0', metalness: 1, roughness: 0.14 })
+  const brass = new THREE.MeshStandardMaterial({ color: '#b48a4a', metalness: 1, roughness: 0.3 })
+
+  // Walnut cabinet with the screen opening, front face at z = 0.3.
+  const outer = roundedRectShape(W, H, 0.55)
+  const hole = roundedRectShape(SW + 0.6, SH + 0.6, 0.62)
+  const holePath = new THREE.Path(hole.getPoints(8).map((p) => new THREE.Vector2(p.x + SC.x, p.y + SC.y)))
+  outer.holes.push(holePath)
+  const cabinet = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(outer, { depth: 3.2, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 4, curveSegments: 10 }),
+    wood,
   )
-  bezel.material.side = THREE.DoubleSide
-  inst.add(bezel)
+  cabinet.position.z = -3.0
+  tv.add(cabinet)
 
-  // Cobalt line just inside the bezel.
-  const line = new THREE.Mesh(new THREE.RingGeometry(R - 0.005, R + 0.03, 160), cobalt)
-  line.position.z = 0.004
-  inst.add(line)
+  // Black mask around the tube, filling the mouth of the opening.
+  const maskShape = roundedRectShape(SW + 0.46, SH + 0.46, 0.55)
+  maskShape.holes.push(new THREE.Path(roundedRectShape(SW, SH, 0.42).getPoints(10)))
+  const mask = new THREE.Mesh(new THREE.ExtrudeGeometry(maskShape, { depth: 0.26, bevelEnabled: false, curveSegments: 10 }), black)
+  mask.position.set(SC.x, SC.y, 0.0)
+  tv.add(mask)
 
-  // Engraved graduations on the bezel face.
-  const tick = new THREE.BoxGeometry(0.016, 1, 0.01)
-  inst.add(
-    ringInstances(120, tick, engraving, (m, i) => {
-      const a = (i / 120) * Math.PI * 2
-      const long = i % 10 === 0
-      const len = long ? 0.2 : i % 5 === 0 ? 0.13 : 0.08
-      const r = 2.95 - len / 2
-      m.position.set(Math.cos(a) * r, Math.sin(a) * r, 0.43)
-      m.rotation.set(0, 0, a - Math.PI / 2)
-      m.scale.set(long ? 1.6 : 1, len, 1)
+  // The tube face: live static.
+  const su = {
+    uTime: { value: 0 },
+    uOn: { value: 0 },
+    uMagOn: { value: 0 },
+    uDegauss: { value: 0 },
+    uHalf: { value: new THREE.Vector2(SW / 2, SH / 2) },
+    uSpot: { value: new THREE.Vector2(0.62, 0.32) },
+    uSpotR: { value: 0.42 },
+    uMag: { value: new THREE.Vector2(0, 0) },
+  }
+  const screen = new THREE.Mesh(
+    new THREE.ShapeGeometry(roundedRectShape(SW, SH, 0.42), 16),
+    new THREE.ShaderMaterial({
+      uniforms: su,
+      vertexShader: screenVertex,
+      fragmentShader: screenFragment,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 4,
     }),
   )
+  screen.position.set(SC.x, SC.y, 0)
+  tv.add(screen)
 
-  // Engraved distance scale, like a cinema lens.
-  const scaleTex = canvasTexture(2048, 128, (c, w, h) => {
-    c.fillStyle = '#0d0e11'
-    c.fillRect(0, 0, w, h)
-    c.fillStyle = '#ece8df'
-    c.textBaseline = 'middle'
-    c.textAlign = 'center'
-    const marks = ['∞', '30', '15', '10', '7', '5', '4', '3', '2.5', '2', '1.7', '1.5', '1.3', '1.2', '1.1', '1 m']
-    marks.forEach((m, i) => {
-      const x = (i + 0.5) * (w / marks.length)
-      c.font = `500 ${m === '∞' ? 54 : 40}px "JetBrains Mono", monospace`
-      c.fillText(m, x, h * 0.42)
-      c.fillRect(x - 1.5, h * 0.78, 3, h * 0.22)
-    })
-    for (let x = 0; x < w; x += w / 64) c.fillRect(x - 1, h * 0.88, 2, h * 0.12)
-  })
-  scaleTex.wrapS = THREE.RepeatWrapping
-  scaleTex.repeat.set(2, 1)
-  scaleTex.colorSpace = THREE.SRGBColorSpace
-  const scaleRing = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.16, 3.16, 0.46, 200, 1, true).rotateX(Math.PI / 2),
-    new THREE.MeshStandardMaterial({ map: scaleTex, metalness: 0.3, roughness: 0.45 }),
-  )
-  scaleRing.position.z = -0.55
-  inst.add(scaleRing)
-  const step = new THREE.Mesh(new THREE.RingGeometry(3.0, 3.2, 160), bright)
-  step.position.z = -0.3
-  inst.add(step)
-  const step2 = new THREE.Mesh(new THREE.TorusGeometry(3.18, 0.035, 10, 200), bright)
-  step2.position.z = -0.82
-  inst.add(step2)
-
-  // Knurled focus ring.
-  const focus = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.9, 160, 1, true).rotateX(Math.PI / 2), rubber)
-  focus.position.z = -1.3
-  inst.add(focus)
-  inst.add(
-    ringInstances(180, new THREE.BoxGeometry(0.045, 0.07, 0.86), rubber, (m, i) => {
-      const a = (i / 180) * Math.PI * 2
-      m.position.set(Math.cos(a) * 3.22, Math.sin(a) * 3.22, -1.3)
-      m.rotation.set(0, 0, a)
-    }),
-  )
-
-  // Red index dot on the bezel face.
-  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.075, 32), new THREE.MeshBasicMaterial({ color: '#d2382c' }))
-  dot.position.set(0, 3.06, 0.425)
-  inst.add(dot)
-
-  // Front element: a thin glass dome that only shows reflections.
-  const SAG = 0.32
-  const RS = (R * R + SAG * SAG) / (2 * SAG)
-  const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(RS, 128, 24, 0, Math.PI * 2, 0, Math.asin(R / RS)).rotateX(Math.PI / 2),
+  // Curved glass over the tube; it only carries reflections.
+  const bulgeGeo = new THREE.PlaneGeometry(SW, SH, 48, 36)
+  const pos = bulgeGeo.attributes.position
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) / (SW / 2)
+    const y = pos.getY(i) / (SH / 2)
+    pos.setZ(i, 0.17 * (1 - x * x * 0.85) * (1 - y * y * 0.85))
+  }
+  bulgeGeo.computeVertexNormals()
+  const bulge = new THREE.Mesh(
+    bulgeGeo,
     new THREE.MeshPhysicalMaterial({
       color: '#ffffff',
-      metalness: 0,
       roughness: 0.04,
       clearcoat: 1,
       transparent: true,
-      opacity: 0.14,
-      envMapIntensity: 2.2,
+      opacity: 0.16,
+      envMapIntensity: 2.4,
       depthWrite: false,
     }),
   )
-  dome.position.z = SAG - RS + 0.01
-  inst.add(dome)
+  bulge.position.set(SC.x, SC.y, 0.01)
+  tv.add(bulge)
 
-  // Barrel and bands.
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(3.02, 3.02, 4.6, 160, 1, true).rotateX(Math.PI / 2), satin)
-  barrel.position.z = -3.55
-  inst.add(barrel)
-  for (const z of [-2.35, -5.25]) {
-    const band = new THREE.Mesh(new THREE.TorusGeometry(3.04, 0.04, 12, 200), bright)
-    band.position.z = z
-    inst.add(band)
+  // Glow from the tube on the mask and cabinet.
+  const glowLight = new THREE.PointLight('#e2e8ff', 0, 7, 2)
+  glowLight.position.set(SC.x, SC.y, 1.3)
+  tv.add(glowLight)
+
+  // Control panel: brushed plate, channel dial, volume knob, power light, speaker slats.
+  const PX = 2.22
+  const dials = [
+    { y: 1.25, r: 0.46, label: 'CHANNEL', numbers: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'] },
+    { y: 0.05, r: 0.3, label: 'VOLUME' },
+  ]
+  const plateH = 4.1
+  const toCanvas = (y) => ((plateH / 2 - y) / plateH) * 1000
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.05, plateH),
+    new THREE.MeshStandardMaterial({
+      map: panelTexture(dials.map((d) => ({ ...d, y: toCanvas(d.y), r: d.r * 244 }))),
+      metalness: 0.75,
+      roughness: 0.38,
+    }),
+  )
+  plate.position.set(PX, 0, 0.31)
+  tv.add(plate)
+
+  const dial = new THREE.Group()
+  dial.position.set(PX, dials[0].y, 0.31)
+  const dialBody = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.31, 0.32, 48).rotateX(Math.PI / 2), black)
+  dialBody.position.z = 0.16
+  const dialCap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 48).rotateX(Math.PI / 2), chrome)
+  dialCap.position.z = 0.33
+  const pointerMark = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.2, 0.02), new THREE.MeshBasicMaterial({ color: '#f2ede3' }))
+  pointerMark.position.set(0, 0.2, 0.33)
+  dial.add(dialBody, dialCap, pointerMark)
+  tv.add(dial)
+
+  const vol = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.22, 40).rotateX(Math.PI / 2), black)
+  vol.position.set(PX, dials[1].y, 0.42)
+  const volMark = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.02), new THREE.MeshBasicMaterial({ color: '#f2ede3' }))
+  volMark.position.set(PX + 0.07, dials[1].y + 0.08, 0.535)
+  volMark.rotation.z = -0.7
+  tv.add(vol, volMark)
+
+  const led = new THREE.Mesh(new THREE.CircleGeometry(0.055, 24), new THREE.MeshBasicMaterial({ color: '#2340d6' }))
+  led.position.set(PX, -0.62, 0.32)
+  tv.add(led)
+
+  const slat = new THREE.BoxGeometry(0.8, 0.055, 0.04)
+  for (let i = 0; i < 8; i++) {
+    const s = new THREE.Mesh(slat, black)
+    s.position.set(PX, -1.0 - i * 0.13, 0.33)
+    tv.add(s)
   }
-  const cap = new THREE.Mesh(new THREE.CircleGeometry(3.03, 96), rubber)
-  cap.position.z = -5.85
-  cap.rotation.y = Math.PI
-  inst.add(cap)
 
-  // Finder scope on the upper left of the barrel.
-  const finder = new THREE.Group()
-  finder.position.set(-2.62, 2.62, -2.6)
-  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 2.8, 64).rotateX(Math.PI / 2), satin)
-  const hood = new THREE.Mesh(new THREE.CylinderGeometry(0.43, 0.43, 0.5, 64, 1, true).rotateX(Math.PI / 2), polished)
-  hood.position.z = 1.3
-  hood.material = polished.clone()
-  hood.material.side = THREE.DoubleSide
-  const flens = new THREE.Mesh(new THREE.CircleGeometry(0.34, 48), new THREE.MeshStandardMaterial({ color: '#13205f', metalness: 1, roughness: 0.05 }))
-  flens.position.z = 1.2
-  finder.add(tube, hood, flens)
-  for (const z of [-0.8, 0.7]) {
-    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.28), polished)
-    bracket.position.set(0.3, -0.3, z)
-    bracket.rotation.z = Math.PI / 4
-    finder.add(bracket)
+  // Tapered legs with brass feet.
+  for (const [x, z] of [[-2.45, -0.4], [2.45, -0.4], [-2.45, -2.5], [2.45, -2.5]]) {
+    const leg = new THREE.Group()
+    leg.position.set(x, -H / 2, z)
+    leg.rotation.set(z > -1 ? 0.12 : -0.12, 0, x < 0 ? -0.14 : 0.14)
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.06, 1.4, 20), wood)
+    stem.position.y = -0.7
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.16, 20), brass)
+    foot.position.y = -1.46
+    leg.add(stem, foot)
+    tv.add(leg)
   }
-  inst.add(finder)
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(10, 6), new THREE.MeshBasicMaterial({ map: radialTexture('rgba(40,30,20,0.28)'), transparent: true, depthWrite: false }))
+  shadow.rotation.x = -Math.PI / 2
+  shadow.position.set(0, -H / 2 - 1.55, -1.5)
+  tv.add(shadow)
 
-  // Mount: saddle, collar and a post that runs off the bottom of the frame.
-  const saddle = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.45, 2.8), polished)
-  saddle.position.set(0, -3.2, -3.5)
-  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.45, 64), bright)
-  collar.position.set(0, -3.75, -3.5)
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 14, 48), satin)
-  post.position.set(0, -10.9, -3.5)
-  const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.6, 32).rotateZ(Math.PI / 2), bright)
-  knob.position.set(0.85, -3.75, -3.5)
-  inst.add(saddle, collar, post, knob)
+  // Rabbit-ear antenna.
+  const base = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), black)
+  base.position.set(0.9, H / 2 + 0.08, -1.5)
+  tv.add(base)
+  for (const side of [-1, 1]) {
+    const ear = new THREE.Group()
+    ear.position.set(0.9, H / 2 + 0.3, -1.5)
+    ear.rotation.set(-0.12, 0, side * 0.55)
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.034, 2.1, 12), chrome)
+    rod.position.y = 1.05
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), chrome)
+    tip.position.y = 2.1
+    ear.add(rod, tip)
+    tv.add(ear)
+  }
 
-  const portal = createPortal({ shape: 'circle', radius: R, smoke: 0.6, tint: '#0c0f17', rim: 1, sheen: 1 })
-  inst.add(portal.mesh)
+  // The bright patch in the static is the portal into SyncDocs.
+  const PR = su.uSpotR.value
+  const portal = createPortal({ shape: 'circle', radius: PR, smoke: 0, tint: '#fffaf0', rim: 0, sheen: 0, static: true })
+  portal.mesh.position.set(SC.x + su.uSpot.value.x, SC.y + su.uSpot.value.y, 0.003)
+  portal.uniforms.uSpot.value.copy(su.uSpot.value)
+  portal.uniforms.uSpotR.value = PR
+  portal.uniforms.uScreenHalf.value.copy(su.uHalf.value)
+  tv.add(portal.mesh)
+  tv.updateMatrixWorld(true)
+  const P = portal.mesh.getWorldPosition(new THREE.Vector3())
+
+  const ray = new THREE.Raycaster()
+  const hitLocal = new THREE.Vector3()
+  const state = { mag: 0, degauss: 0, channel: 0, on: 0, hint: '' }
+  let t0 = null
+  let dialAngle = 0
 
   return {
-    name: 'instrument',
+    name: 'crt',
     scene,
-    near: 0.03,
+    near: 0.01,
     far: 220,
     portal,
-    embed: embed(G, 0.1, inst.quaternion),
+    // The inner world's entrance spans a radius of 24.5 of its own units.
+    embed: embed(P, PR / 24.5, tv.quaternion),
     dark: false,
-    tick() {
-      // The glass fades as the camera reaches it, so nothing sits between it and the next scene.
-      dome.material.opacity = 0.14 * portal.uniforms.uFade.value
-      dome.visible = dome.material.opacity > 0.005
+    state,
+    tick(t, ctx) {
+      if (t0 == null) t0 = t
+      const on = Math.min(1, Math.max(0, (t - t0 - 0.3) / 1.3))
+      state.on = on
+      su.uOn.value = on
+      su.uTime.value = t
+      portal.uniforms.uPower.value = THREE.MathUtils.smoothstep(on, 0.6, 0.8)
+
+      let over = false
+      if (ctx.active && ctx.inside && ctx.camera) {
+        ctx.camera.updateMatrixWorld()
+        ray.setFromCamera(ctx.ndc, ctx.camera)
+        const hit = ray.intersectObject(screen, false)[0]
+        if (hit) {
+          over = true
+          screen.worldToLocal(hitLocal.copy(hit.point))
+          const k = state.mag < 0.05 ? 1 : 1 - Math.exp(-ctx.dt * 12)
+          su.uMag.value.x += (hitLocal.x - su.uMag.value.x) * k
+          su.uMag.value.y += (hitLocal.y - su.uMag.value.y) * k
+        }
+      }
+      state.mag += ((over ? 1 : 0) - state.mag) * (1 - Math.exp(-ctx.dt * 6))
+      su.uMagOn.value = state.mag
+
+      // A click degausses the tube and turns the channel dial one stop.
+      if (ctx.clicks && on > 0.9) {
+        state.degauss = 1
+        state.channel = (state.channel + 1) % 12
+        dialAngle = -(state.channel / 11) * Math.PI * 1.6
+      }
+      state.degauss *= Math.exp(-ctx.dt * 1.4)
+      su.uDegauss.value = state.degauss
+      dial.rotation.z += (dialAngle - dial.rotation.z) * (1 - Math.exp(-ctx.dt * 10))
+      tv.position.x = G.x + Math.sin(t * 60) * 0.012 * state.degauss
+
+      const fade = portal.uniforms.uFade.value
+      glowLight.intensity = (1.6 + Math.random() * 0.5) * on * fade
+      bulge.material.opacity = 0.16 * fade
+      bulge.visible = bulge.material.opacity > 0.005
+      state.hint = over ? 'Click · degauss' : ''
     },
   }
 }
@@ -1094,7 +1255,7 @@ function buildPavilion(renderer) {
 export async function buildWorlds(renderer) {
   const env = envFor(renderer)
   return [
-    buildInstrument(env),
+    buildCRT(env),
     buildSyncDocs(renderer),
     buildClipboard(renderer, env),
     buildFinalTransmission(renderer),
