@@ -37,10 +37,6 @@
     <a class="skip" href="#work-index">Skip to the project list</a>
 
     <header class="masthead">
-      <a class="mark" href="#intro" aria-label="Shivansh Pratap Singh, back to the top">
-        <span class="mark__lens" aria-hidden="true"></span>
-        <span class="mark__text">S. P. Singh</span>
-      </a>
       <nav class="masthead__nav" aria-label="Primary">
         <div class="allwork">
           <button class="allwork__toggle" type="button" aria-expanded="false" aria-controls="allwork-panel">
@@ -74,6 +70,15 @@
     </header>
 
     <canvas class="stage-canvas" aria-hidden="true"></canvas>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="cursor" aria-hidden="true"><span class="cursor__label"></span></div>
+
+    <div class="hud journey-only" aria-hidden="true">
+      <span class="hud__scene">00 · Intro</span>
+      <span class="hud__row"><span>Mag</span><b class="hud__mag">×1.0</b></span>
+      <span class="hud__row"><span>Depth</span><b class="hud__depth">0.0</b></span>
+      <span class="hud__bar"><i></i></span>
+    </div>
 
     <ol class="rail" aria-hidden="true">
       <li data-rail="0"><span>Intro</span></li>
@@ -89,15 +94,18 @@
         <div class="hero__inner">
           <div class="hero__copy">
             <p class="micro hero__eyebrow">Portfolio · Engineering and frontend work</p>
-            <h1 id="hero-title" class="hero__title">
-              <span>Shivansh</span>
-              <span>Pratap <em>Singh</em></span>
+            <h1 id="hero-title" class="hero__title" aria-label="Shivansh Pratap Singh">
+              <span class="hero__line" aria-hidden="true">Shivansh</span>
+              <span class="hero__line" aria-hidden="true">Pratap <em>Singh</em></span>
             </h1>
             <p class="hero__intro">
               I’m Shivansh Pratap Singh, a CS student and teaching assistant. I build web apps and study how
               software works closer to the machine.
             </p>
-            <p class="hero__cue micro journey-only"><span aria-hidden="true">↓</span> Scroll to fall into the glass</p>
+            <div class="hero__cues journey-only">
+              <p class="hero__cue micro"><span class="hero__key" aria-hidden="true">↓</span> Scroll to fall into the glass</p>
+              <p class="hero__cue micro"><span class="hero__key" aria-hidden="true">◎</span> Hover the lens to open the aperture</p>
+            </div>
           </div>
           <figure class="instrument-fallback linear-only" aria-hidden="true">
             <div class="instrument-fallback__ring">
@@ -113,9 +121,10 @@
 
       <section class="stage project" id="syncdocs" data-stage="p1" aria-labelledby="syncdocs-title">
         <div class="card-wrap">
-        <article class="card">
+        <article class="card" data-num="01">
           <p class="micro card__eyebrow">01 · Lead project · Full stack</p>
           <h2 id="syncdocs-title" class="card__title">SyncDocs</h2>
+          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Click the scene to write a line and watch it autosave.</p>
           <p class="card__lede">
             A rich-text document editor built with MongoDB, Express, React and Node, the groundwork for
             collaborative writing. Its focus is never losing work.
@@ -145,9 +154,10 @@
 
       <section class="stage project" id="clipboard" data-stage="p2" aria-labelledby="clipboard-title">
         <div class="card-wrap">
-        <article class="card">
+        <article class="card" data-num="02">
           <p class="micro card__eyebrow">02 · Hackathon team project</p>
           <h2 id="clipboard-title" class="card__title">Universal Clipboard Sync</h2>
+          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Click the scene to copy: the clip races to the other desktop.</p>
           <p class="card__lede">
             An Electron desktop app that sends copied text and images between paired computers over a WebRTC data
             channel, with a small Node signaling server for pairing. Built with my hackathon team.
@@ -180,9 +190,10 @@
 
       <section class="stage project" id="final-transmission" data-stage="p3" aria-labelledby="ft-title">
         <div class="card-wrap">
-        <article class="card">
+        <article class="card" data-num="03">
           <p class="micro card__eyebrow">03 · Frontend experiment</p>
           <h2 id="ft-title" class="card__title">Final Transmission</h2>
+          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Move the pointer to turn the planet.</p>
           <p class="card__lede">
             A cinematic landing page set in the year 3027: a damaged Earth in orbit, a ring of debris, and a
             mission-control interface that reacts as you move.
@@ -205,9 +216,10 @@
 
       <section class="stage project project--long" id="still-pavilion" data-stage="p4" aria-labelledby="sp-title">
         <div class="card-wrap">
-        <article class="card">
+        <article class="card" data-num="04">
           <p class="micro card__eyebrow">04 · Frontend experiment</p>
           <h2 id="sp-title" class="card__title">Still Pavilion</h2>
+          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Move the pointer from left to right: morning, noon, dusk.</p>
           <p class="card__lede">
             A quiet architectural study. You explore a small pavilion by scrolling and dragging, and switch its
             material and the time of day.

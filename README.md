@@ -20,6 +20,13 @@ The build output is a plain static site, so it can be hosted anywhere.
 - **Camera path** (`src/journey/track.js`). Scroll maps to a value `g` from 0 to 9: hero, four transitions, four reading dwells. In a transition, the distance to the target object is interpolated in log space, which keeps a constant zoom rate and reads as falling. Each pose is a pure function of `g`, so scrolling back retraces the path exactly.
 - **Glass shader** (`src/journey/portal.js`). It adds smoke, a cobalt rim with edge refraction, and a sheen that follows the viewing angle. A pointer lens clears the smoke, magnifies, and splits colour, and the effect is confined to the aperture.
 - **Pointer look-around.** The camera orbits its focus point slightly, and the orbit is stronger on the hero. It eases back to centre when the pointer leaves. Scroll alone decides progress.
+- **Iris diaphragm.** Nine blades are drawn in the glass shader. They open on load, dilate under the pointer to reveal the lens, and open fully as the camera dives in.
+- **Scene interactions** (the cursor labels each one):
+  - SyncDocs: click to type a line and watch the autosave states (Unsaved changes, then Saving…, then Saved).
+  - Clipboard Sync: click to send a burst along the signal.
+  - Final Transmission: the planet follows the pointer.
+  - Still Pavilion: the pointer sets the time of day, from morning to dusk.
+- **Readout.** A live readout shows the scene, the magnification relative to the hero, and the depth.
 - **Text is HTML.** Titles, descriptions and links are semantic HTML laid over the canvas, and never part of the 3D scene.
 
 ## Layouts

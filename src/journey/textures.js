@@ -39,8 +39,8 @@ function roundRect(ctx, x, y, w, h, r) {
 
 export function savedPillTexture(renderer) {
   return canvasTexture(
-    340,
-    100,
+    600,
+    125,
     (ctx, w, h) => {
       ctx.clearRect(0, 0, w, h)
       roundRect(ctx, 4, 4, w - 8, h - 8, (h - 8) / 2)

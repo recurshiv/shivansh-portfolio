@@ -17,6 +17,15 @@ export async function start() {
   const projects = [...document.querySelectorAll('section.project')]
   const cards = projects.map((p) => p.querySelector('.card'))
   const about = document.getElementById('about')
+  const hud = document.querySelector('.hud')
+  const hudScene = hud.querySelector('.hud__scene')
+  const hudMag = hud.querySelector('.hud__mag')
+  const hudDepth = hud.querySelector('.hud__depth')
+  const hudBar = hud.querySelector('.hud__bar i')
+  const cursor = document.querySelector('.cursor')
+  const cursorLabel = cursor.querySelector('.cursor__label')
+  const finePointer = window.matchMedia('(pointer: fine)').matches
+  if (finePointer) document.documentElement.classList.add('has-cursor')
 
   await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1500))])
 
@@ -91,6 +100,23 @@ export async function start() {
   document.documentElement.addEventListener('mouseleave', leave)
   window.addEventListener('blur', leave)
 
+  let clicks = 0
+  window.addEventListener('click', (e) => {
+    if (e.target.closest('a, button, .card, .allwork__panel')) return
+    clicks++
+  })
+
+  // Primary buttons lean toward the pointer.
+  for (const btn of document.querySelectorAll('.btn--primary')) {
+    btn.addEventListener('pointermove', (e) => {
+      const r = btn.getBoundingClientRect()
+      const x = (e.clientX - (r.left + r.width / 2)) * 0.25
+      const y = (e.clientY - (r.top + r.height / 2)) * 0.35
+      btn.style.translate = `${x}px ${y}px`
+    })
+    btn.addEventListener('pointerleave', () => (btn.style.translate = '0 0'))
+  }
+
   /* ---------- In-page links: jump straight to a readable pose ---------- */
 
   let snap = true
@@ -132,6 +158,13 @@ export async function start() {
 
   let g = progressFor(window.scrollY)
   let last = performance.now()
+  const startTime = last
+  const cursorPos = { x: -100, y: -100 }
+  const SCENES = ['00 · Intro', '01 · SyncDocs', '02 · Clipboard Sync', '03 · Final Transmission', '04 · Still Pavilion']
+  const ACTIONS = [null, 'Click · write a line', 'Click · copy', 'Move · turn the planet', 'Move · change the light']
+  // Cumulative scale of each world relative to the instrument's world.
+  const worldScale = [1]
+  for (let k = 1; k < worlds.length; k++) worldScale[k] = worldScale[k - 1] * worlds[k - 1].embed.s
   const camPos = new THREE.Vector3()
   const camDir = new THREE.Vector3()
   const tmp = new THREE.Vector3()
@@ -143,8 +176,14 @@ export async function start() {
   const camQuat = new THREE.Quaternion()
   const state = { g: 0, world: 0, target: 0 }
 
+  let lensHover = 0
+  let focusNow = 1
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000)
+    lensHover = 0
+    // rAF timestamps can precede performance.now() taken at startup; never go negative.
+    const rawDt = Math.min(0.5, Math.max(0, (now - last) / 1000))
+    // Smoothing below is exponential, so real elapsed time keeps it frame-rate independent.
+    const dt = rawDt
     last = now
     const time = now / 1000
 
@@ -181,6 +220,7 @@ export async function start() {
     camUp.crossVectors(right, camDir).normalize()
     const strength = THREE.MathUtils.lerp(0.075, 0.03, smooth(0.6, 1.4, g))
     const focus = p.focus
+    focusNow = focus
     const focusPoint = tmp.copy(camPos).addScaledVector(camDir, focus)
     camPos.addScaledVector(right, pointer.x * strength * focus).addScaledVector(camUp, pointer.y * strength * 0.7 * focus)
     camDir.copy(focusPoint).sub(camPos).normalize()
@@ -219,11 +259,16 @@ export async function start() {
       c.updateMatrixWorld()
     }
 
+    const aboutTopNow = about.getBoundingClientRect().top
+
     /* Portal uniforms. */
     const pr = renderer.getPixelRatio()
+    const sceneCtx = { active: false, pointer, dt, rawDt, clicks: 0 }
     for (let j = 0; j <= depth; j++) {
       const w = worlds[world + j]
-      w.tick(time)
+      sceneCtx.active = j === 0 && aboutTopNow > vh * 0.3
+      sceneCtx.clicks = sceneCtx.active ? clicks : 0
+      w.tick(time, sceneCtx)
       if (!w.portal) continue
       const u = w.portal.uniforms
       const c = cams[world + j]
@@ -249,11 +294,24 @@ export async function start() {
         const want = center.z < 1 ? (1 - smooth(rpx * 0.85, rpx * 1.5 + 30, d)) * pointer.presence : 0
         u.uHover.value += (want - u.uHover.value) * (1 - Math.exp(-dt * 7))
         u.uPointer.value.set(pointer.px * pr, (vh - pointer.py) * pr)
-        u.uPointerR.value = THREE.MathUtils.clamp(rpx * 0.45, 60, 210) * pr
+        u.uPointerR.value = THREE.MathUtils.clamp(rpx * 0.5, 90, 240) * pr
+        lensHover = u.uHover.value
       } else {
         u.uHover.value = 0
       }
+      // The instrument's aperture opens on load, dilates under the pointer and
+      // opens fully as the camera dives in.
+      if (world + j === 0) {
+        const intro = smooth(0.2, 2.2, (now - startTime) / 1000)
+        const closed = THREE.MathUtils.lerp(1, 0.6, intro)
+        const iris = closed * (1 - 0.88 * (j === 0 ? u.uHover.value : 0)) * (1 - smooth(0.55, 1.3, g))
+        u.uIris.value = iris + Math.sin(time * 1.3) * 0.012 * iris
+      } else {
+        u.uIris.value = 0
+      }
     }
+
+    clicks = 0
 
     /* Render deepest first so each portal can sample the world behind it. */
     const aboutTop = about.getBoundingClientRect().top
@@ -284,6 +342,35 @@ export async function start() {
     rail.classList.toggle('is-dark', dark)
     const current = aboutTop < vh * 0.5 ? 5 : raw < 1.5 ? 0 : raw < 3.5 ? 1 : raw < 5.5 ? 2 : raw < 7.5 ? 3 : 4
     railItems.forEach((li, i) => li.classList.toggle('is-current', i === current))
+
+    const scale = worldScale[world]
+    const mag = (worlds[0] && 16.5) / Math.max(1e-9, focusNow * scale)
+    hudScene.textContent = current === 5 ? '05 · About' : SCENES[Math.min(4, current)]
+    hudMag.textContent = mag < 100 ? `×${mag.toFixed(1)}` : `×${Math.round(mag).toLocaleString('en-US')}`
+    hudDepth.textContent = (g * 1.0).toFixed(2)
+    hudBar.style.width = `${(g / (bounds.length - 1)) * 100}%`
+    hud.classList.toggle('is-dark', dark)
+    hud.style.opacity = String(smooth(0, vh * 0.4, aboutTop))
+
+    if (finePointer) {
+      cursorPos.x += (pointer.px - cursorPos.x) * Math.min(1, dt * 22)
+      cursorPos.y += (pointer.py - cursorPos.y) * Math.min(1, dt * 22)
+      cursor.style.transform = `translate(${cursorPos.x}px, ${cursorPos.y}px)`
+      const over = document.elementFromPoint(pointer.px, pointer.py)
+      const onLink = !!over?.closest('a, button')
+      const onCard = !!over?.closest('.card, .masthead, .about')
+      let label = ''
+      if (onLink) label = ''
+      else if (lensHover > 0.35) label = 'Aperture open'
+      else if (current === 0 && raw < 0.9) label = ''
+      else if (!onCard && current >= 1 && current <= 4 && Math.abs(raw - Math.round(raw / 2) * 2) < 0.95) label = ACTIONS[current]
+      cursor.classList.toggle('is-link', onLink)
+      cursor.classList.toggle('is-lens', !onLink && lensHover > 0.35)
+      cursor.classList.toggle('is-dark', dark && !onCard)
+      cursor.classList.toggle('has-label', !!label && pointer.inside)
+      if (label) cursorLabel.textContent = label
+      cursor.style.opacity = pointer.inside ? '1' : '0'
+    }
 
     state.g = g
     state.target = target

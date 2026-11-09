@@ -3,6 +3,31 @@
 
 const root = document.documentElement
 
+// Split the name into letters for the reveal. The h1 keeps an aria-label.
+let index = 0
+for (const line of document.querySelectorAll('.hero__line')) {
+  const walk = (node) => {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        const frag = document.createDocumentFragment()
+        for (const ch of child.textContent) {
+          if (ch.trim() === '') {
+            frag.append(ch)
+            continue
+          }
+          const span = document.createElement('span')
+          span.className = 'char'
+          span.style.setProperty('--i', index++)
+          span.textContent = ch
+          frag.append(span)
+        }
+        child.replaceWith(frag)
+      } else walk(child)
+    }
+  }
+  walk(line)
+}
+
 // "View all work" panel.
 const toggle = document.querySelector('.allwork__toggle')
 const panel = document.getElementById('allwork-panel')

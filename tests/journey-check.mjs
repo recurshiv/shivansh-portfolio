@@ -24,7 +24,9 @@ p.on('pageerror', (e) => errs.push(String(e)))
 p.on('console', (m) => m.type() === 'error' && errs.push(m.text()))
 await p.goto(URL, { waitUntil: 'networkidle' })
 await p.waitForFunction(() => window.__journey)
-await p.waitForTimeout(1500)
+// The custom cursor follows the mouse; hide it so image comparisons measure the scene.
+await p.addStyleTag({ content: '.cursor{display:none!important}' })
+await p.waitForTimeout(2500)
 check('journey mode on a wide WebGL desktop', await p.evaluate(() => document.documentElement.classList.contains('journey')))
 
 const settle = () => p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))).then(() => p.waitForFunction(() => Math.abs(window.__journey.state.g - window.__journey.state.target) < 1e-4, null, { timeout: 15000 })).then(() => p.waitForTimeout(400))
@@ -48,11 +50,12 @@ check('hero text is unaffected by the look-around', dText < 0.5, `mean diff ${dT
 await p.mouse.move(720, 450, { steps: 4 })
 await p.evaluate(() => document.documentElement.dispatchEvent(new MouseEvent('mouseleave')))
 await p.waitForTimeout(3000)
-const C = await shot('look-released')
-await p.goto(URL + '?fresh', { waitUntil: 'networkidle' }); await p.waitForFunction(() => window.__journey); await p.waitForTimeout(2500)
-const C0 = await shot('look-untouched')
-const dBack = await diff(C, C0, inst)
-check('view eases back to centre after the pointer leaves', dBack < 1.5, `mean diff vs untouched ${dBack.toFixed(2)}`)
+const released = await p.evaluate(() => window.__journey.camera())
+await p.goto(URL + '?fresh', { waitUntil: 'networkidle' }); await p.waitForFunction(() => window.__journey)
+await p.addStyleTag({ content: '.cursor{display:none!important}' }); await p.waitForTimeout(3000)
+const untouched = await p.evaluate(() => window.__journey.camera())
+const dBack = Math.hypot(...released.position.map((v, i) => v - untouched.position[i]), ...released.quaternion.map((v, i) => v - untouched.quaternion[i]))
+check('view eases back to centre after the pointer leaves', dBack < 1e-3, `pose Δ vs untouched ${dBack.toExponential(1)}`)
 
 // 2. Refraction lens: pointer on the glass vs beside the instrument.
 const glass = { left: 900, top: 230, width: 330, height: 380 }
@@ -62,6 +65,26 @@ const dLensGlass = await diff(G1, G0, glass)
 check('pointer on the glass refracts the scene behind it', dLensGlass > 2, `mean diff in glass ${dLensGlass.toFixed(2)}`)
 const dLensText = await diff(G1, G0, { left: 60, top: 280, width: 560, height: 380 })
 check('refraction leaves the text crisp', dLensText < 0.5, `mean diff in text ${dLensText.toFixed(2)}`)
+
+// 2b. Aperture: the iris is closed-ish at rest and opens under the pointer.
+check('aperture iris opens under the pointer', dLensGlass > 8, `mean diff ${dLensGlass.toFixed(2)}`)
+
+// 2c. Scene interactions.
+{
+  await scrollG(2.45); await p.mouse.move(1000, 700); await p.waitForTimeout(2500)
+  const a = await shot('sync-before'); await p.mouse.click(1000, 700); await p.waitForTimeout(2500)
+  const bb = await shot('sync-after')
+  const d = await diff(a, bb, { left: 600, top: 300, width: 760, height: 420 })
+  check('SyncDocs: a click writes a new line on the page', d > 0.3, `mean diff ${d.toFixed(2)}`)
+  await scrollG(8.45); await p.mouse.move(560, 600, { steps: 3 }); await p.waitForTimeout(3000); const m = await shot('sp-left')
+  await p.mouse.move(1420, 600, { steps: 3 }); await p.waitForTimeout(3000); const n = await shot('sp-right')
+  const d2 = await diff(m, n, { left: 560, top: 0, width: 880, height: 900 })
+  check('Still Pavilion: the pointer changes the light', d2 > 5, `mean diff ${d2.toFixed(2)}`)
+  await scrollG(6.45); await p.mouse.move(700, 200, { steps: 3 }); await p.waitForTimeout(2500); const f1 = await shot('ft-a')
+  await p.mouse.move(1350, 750, { steps: 3 }); await p.waitForTimeout(2500); const f2 = await shot('ft-b')
+  const d3 = await diff(f1, f2, { left: 0, top: 0, width: 560, height: 260 })
+  check('Final Transmission: the planet follows the pointer', d3 > 2, `mean diff ${d3.toFixed(2)}`)
+}
 
 // 3. Reversibility: reach a pose going forward, scroll far ahead, come back.
 await p.mouse.move(720, 450); await p.evaluate(() => document.documentElement.dispatchEvent(new MouseEvent('mouseleave')))

@@ -32,6 +32,7 @@ const fragmentShader = /* glsl */ `
   uniform vec2 uGlint;
   uniform float uFade;
   uniform float uTime;
+  uniform float uIris;
   varying vec2 vLocal;
 
   void main() {
@@ -46,14 +47,14 @@ const fragmentShader = /* glsl */ `
     // Pointer lens, measured in screen pixels so it stays round.
     vec2 fromPointer = gl_FragCoord.xy - uPointer;
     float pr = length(fromPointer) / uPointerR;
-    float lens = uHover * uFade * exp(-pr * pr * 1.7);
+    float lens = uHover * uFade * exp(-pr * pr * 1.4);
 
     vec2 suv = gl_FragCoord.xy / uRes;
     vec2 disp = -n * rim * rim * 0.022 * uRim;
-    disp -= fromPointer / uRes * lens * 0.36;
+    disp -= fromPointer / uRes * lens * 0.5;
     disp += vec2(sin(L.y * 11.0 + uTime * 0.7), cos(L.x * 9.0 - uTime * 0.6)) * 0.0016 * lens;
 
-    float split = rim * rim * 0.007 * uRim + lens * 0.011;
+    float split = rim * rim * 0.007 * uRim + lens * 0.022 * smoothstep(0.0, 1.0, pr);
     vec2 sdir = normalize(disp + vec2(1e-5));
 
     vec3 col = uTint;
@@ -63,10 +64,32 @@ const fragmentShader = /* glsl */ `
       col.b = texture2D(tScene, suv + disp - sdir * split).b;
     }
 
-    float smoke = uSmoke * uFade * (1.0 - 0.9 * lens);
+    float smoke = uSmoke * uFade * (1.0 - lens);
     col = mix(col, uTint, smoke);
-    col *= 1.0 - 0.28 * smoothstep(0.35, 1.0, e) * uFade * uRim;
-    col = mix(col, uRimColor, rim * rim * 0.42 * uRim);
+    col *= 1.0 - 0.3 * smoothstep(0.45, 1.0, e) * uFade * uRim;
+    col = mix(col, uRimColor, smoothstep(0.93, 1.0, e) * 0.35 * uRim * uFade);
+
+    // Iris diaphragm: nine blades whose opening is a regular polygon.
+    if (uIris > 0.001 && uShape < 0.5) {
+      const float N = 9.0;
+      const float SECTOR = 6.2831853 / N;
+      float r = mix(1.03, 0.07, uIris);
+      float rot = uIris * 1.7;
+      float a = atan(L.y, L.x) - rot;
+      float k = floor(a / SECTOR + 0.5);
+      float phi = rot + k * SECTOR;
+      float outside = dot(L, vec2(cos(phi), sin(phi))) - r;
+      float blade = smoothstep(-0.003, 0.003, outside);
+      // Seams curve outward from the polygon's corners, like overlapping blades.
+      float tw = (a + (length(L) - r) * 1.9) / SECTOR;
+      float s = fract(tw);
+      float id = mod(floor(tw), 2.0);
+      vec3 metal = mix(vec3(0.018, 0.02, 0.026), vec3(0.075, 0.08, 0.095), s) * (0.85 + 0.25 * id);
+      metal += vec3(0.5, 0.52, 0.56) * smoothstep(0.03, 0.0, s) * 0.18;
+      metal += vec3(0.75, 0.78, 0.85) * smoothstep(0.035, 0.0, outside) * blade * 0.55;
+      metal *= 1.0 - 0.35 * smoothstep(0.6, 1.0, length(L));
+      col = mix(col, metal, blade);
+    }
 
     // Sheen bands slide across the glass as the viewing angle changes.
     float g = dot(L, normalize(vec2(-0.8, 1.0))) + uGlint.x * 0.45 - uGlint.y * 0.3;
@@ -74,7 +97,7 @@ const fragmentShader = /* glsl */ `
     col += sheen * uSheen * uFade;
 
     // A faint ring marks the lens edge.
-    col += uRimColor * smoothstep(0.05, 0.0, abs(pr - 1.0)) * uHover * uFade * 0.18;
+    col += vec3(0.9, 0.92, 1.0) * smoothstep(0.035, 0.0, abs(pr - 1.05)) * uHover * uFade * 0.35;
 
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -126,6 +149,7 @@ export function createPortal(o) {
     uGlint: { value: new THREE.Vector2() },
     uFade: { value: 1 },
     uTime: { value: 0 },
+    uIris: { value: 0 },
   }
   const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader })
   const mesh = new THREE.Mesh(geometry, material)

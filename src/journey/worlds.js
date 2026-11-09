@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { createPortal, roundedRectShape } from './portal.js'
 import {
+  canvasTexture,
   imageTexture,
   radialTexture,
   savedPillTexture,
@@ -173,7 +174,7 @@ function buildInstrument(env) {
   knob.position.set(0.85, -3.75, -3.5)
   inst.add(saddle, collar, post, knob)
 
-  const portal = createPortal({ shape: 'circle', radius: R, smoke: 0.44, tint: '#1a1e2a', rim: 1, sheen: 1 })
+  const portal = createPortal({ shape: 'circle', radius: R, smoke: 0.6, tint: '#0c0f17', rim: 1, sheen: 1 })
   inst.add(portal.mesh)
 
   return {
@@ -231,12 +232,83 @@ function buildSyncDocs(renderer) {
     scene.add(g)
   }
 
-  const pill = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.7, 0.5),
-    new THREE.MeshBasicMaterial({ map: savedPillTexture(renderer), transparent: true }),
-  )
-  pill.position.set(3.95, H / 2 + 0.55, PAGE_Z)
+  const pillTex = savedPillTexture(renderer)
+  const pill = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.71), new THREE.MeshBasicMaterial({ map: pillTex, transparent: true }))
+  pill.position.set(3.3, H / 2 + 0.62, PAGE_Z)
   scene.add(pill)
+
+  // Lines typed live onto the blank lower half of the page.
+  const inkTex = canvasTexture(800, 300, () => {}, renderer)
+  const inkCtx = inkTex.image.getContext('2d')
+  const writing = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, 3),
+    // Offset so it never z-fights with the page face just behind it.
+    new THREE.MeshBasicMaterial({ map: inkTex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+  )
+  writing.position.set(0.15, -2.35, PAGE_Z + 0.042)
+  scene.add(writing)
+  const pool = [
+    'Homework: worksheet 3B, questions 1 to 6.',
+    'Bring fraction strips for Thursday.',
+    'Extension: order 7/8, 5/6 and 3/4.',
+    'Recap quiz next Monday.',
+    'Pairs explain their answer to the class.',
+  ]
+  const doc = { lines: [], typing: null, chars: 0, status: 'saved', since: 0, nextLine: 0, auto: false, caret: true, dirty: true }
+  function drawInk() {
+    const c = inkCtx
+    // Opaque white like the page underneath: no alpha fringes on the text.
+    c.fillStyle = '#ffffff'
+    c.fillRect(0, 0, 800, 300)
+    c.font = '400 23px Inter, system-ui, sans-serif'
+    c.fillStyle = '#1d1f24'
+    c.textBaseline = 'top'
+    const rows = [...doc.lines]
+    if (doc.typing != null) rows.push(pool[doc.typing].slice(0, doc.chars))
+    rows.forEach((text, i) => c.fillText(text, 0, 10 + i * 39))
+    if (doc.caret && doc.typing != null) {
+      const last = rows[rows.length - 1]
+      const x = c.measureText(last).width + 2
+      c.fillStyle = '#2340d6'
+      c.fillRect(x, 10 + (rows.length - 1) * 39, 2, 26)
+    }
+    inkTex.needsUpdate = true
+  }
+  function drawPill() {
+    const c = pillTex.image.getContext('2d')
+    const w = pillTex.image.width
+    const h = pillTex.image.height
+    const look = {
+      saved: ['#e8f8ee', '#16703e', 'Saved'],
+      unsaved: ['#fff4dc', '#9a5b00', 'Unsaved changes'],
+      saving: ['#eef0f4', '#4b5160', 'Saving…'],
+    }[doc.status]
+    c.clearRect(0, 0, w, h)
+    c.font = '600 44px Inter, system-ui, sans-serif'
+    const tw = c.measureText(look[2]).width
+    const pw = tw + 140
+    c.beginPath()
+    c.roundRect(w - pw - 4, 4, pw, h - 8, (h - 8) / 2)
+    c.fillStyle = look[0]
+    c.fill()
+    c.fillStyle = look[1]
+    c.beginPath()
+    c.arc(w - pw + 52, h / 2, 9, 0, Math.PI * 2)
+    c.fill()
+    c.textBaseline = 'middle'
+    c.fillText(look[2], w - pw + 82, h / 2 + 2)
+    pillTex.needsUpdate = true
+  }
+  drawPill()
+  function write() {
+    if (doc.typing != null) return
+    if (doc.lines.length >= 3) doc.lines = []
+    doc.typing = doc.nextLine
+    doc.nextLine = (doc.nextLine + 1) % pool.length
+    doc.chars = 0
+    doc.status = 'unsaved'
+    drawPill()
+  }
 
   // Copy glyph in the right margin: two overlapping rounded squares.
   const GLYPH = v(3.9, 3.05, PAGE_Z + 0.05)
@@ -285,10 +357,46 @@ function buildSyncDocs(renderer) {
     target: v(0, 0, PAGE_Z),
     embed: embed(GLYPH, (S - 0.05) / 20),
     dark: false,
-    tick(t) {
+    tick(t, ctx) {
       const k = (t * 0.5) % 1
       hint.scale.setScalar(1 + k * 0.7)
       hint.material.opacity = 0.55 * (1 - k)
+      if (ctx.active) {
+        if (!doc.auto) {
+          doc.auto = true
+          doc.since = t
+        }
+        if (ctx.clicks) write()
+        // One line writes itself shortly after arriving, so the page is visibly alive.
+        if (doc.lines.length === 0 && doc.typing == null && t - doc.since > 1.2) write()
+      }
+      if (doc.typing != null) {
+        const n = Math.min(pool[doc.typing].length, doc.chars + ctx.rawDt * 26)
+        if (Math.floor(n) !== Math.floor(doc.chars)) doc.dirty = true
+        doc.chars = n
+        if (n >= pool[doc.typing].length) {
+          doc.lines.push(pool[doc.typing])
+          doc.typing = null
+          doc.since = t
+          doc.dirty = true
+        }
+      } else if (doc.status === 'unsaved' && t - doc.since > 0.8) {
+        doc.status = 'saving'
+        doc.since = t
+        drawPill()
+      } else if (doc.status === 'saving' && t - doc.since > 0.7) {
+        doc.status = 'saved'
+        drawPill()
+      }
+      const caret = Math.floor(t * 2.2) % 2 === 0
+      if (caret !== doc.caret) {
+        doc.caret = caret
+        doc.dirty = true
+      }
+      if (doc.dirty) {
+        drawInk()
+        doc.dirty = false
+      }
     },
   }
 }
@@ -353,7 +461,13 @@ function buildClipboard(renderer, env) {
     return g
   }
   device(-4.3, 0.28, 'a')
-  device(4.3, -0.28, 'b')
+  const deviceB = device(4.3, -0.28, 'b')
+  const flash = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.1, 3.16),
+    new THREE.MeshBasicMaterial({ color: '#4d66ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+  )
+  flash.position.z = 0.1
+  deviceB.add(flash)
 
   // Receiver: a mast with a display. The display is the next portal.
   const RX = v(15, 6.5, -74)
@@ -404,6 +518,9 @@ function buildClipboard(renderer, env) {
   })
   const pulses = []
   const pulseMat = new THREE.MeshBasicMaterial({ color: '#e9edff' })
+  let burst = 0
+  let phase = 0
+  let flashAt = 0
   for (let i = 0; i < 8; i++) {
     const p = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), pulseMat)
     scene.add(p)
@@ -419,10 +536,17 @@ function buildClipboard(renderer, env) {
     target: v(0, 0, Z),
     embed: embed(portal.mesh.position, 3.2 / 32),
     dark: true,
-    tick(t) {
-      for (const s of signals) s.material.uniforms.uTime.value = t
+    tick(t, ctx) {
+      if (ctx.active && ctx.clicks) {
+        burst = 1
+        flashAt = t + 0.55
+      }
+      burst = Math.max(0, burst - ctx.rawDt * 0.6)
+      phase += ctx.rawDt * 0.16 * (1 + burst * 6)
+      flash.material.opacity = flashAt ? 0.55 * Math.exp(-Math.max(0, t - flashAt) * 3) * (t > flashAt ? 1 : 0) : 0
+      for (const s of signals) s.material.uniforms.uTime.value = phase * 6
       pulses.forEach((p, i) => {
-        const u = (t * 0.16 + i / pulses.length) % 1
+        const u = (((phase + i / pulses.length) % 1) + 1) % 1
         // First 30% of the cycle crosses between the devices, the rest flies to the receiver.
         const pt = u < 0.3 ? curves[0].getPointAt(u / 0.3) : curves[1].getPointAt((u - 0.3) / 0.7)
         p.position.copy(pt)
@@ -557,8 +681,12 @@ function buildFinalTransmission(renderer) {
     target: SCREEN.clone(),
     embed: embed(portal.mesh.position, 2.4 / 24),
     dark: true,
-    tick(t) {
-      planet.rotation.y = t * 0.04
+    tick(t, ctx) {
+      const px = ctx.active ? ctx.pointer.x : 0
+      const py = ctx.active ? ctx.pointer.y : 0
+      planet.rotation.y = t * 0.04 + px * 1.1
+      planet.rotation.x = -py * 0.45
+      planet.position.y = 12 + py * 3
     },
   }
 }
@@ -580,6 +708,12 @@ function buildPavilion(renderer) {
   Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 90 })
   sun.shadow.bias = -0.0005
   scene.add(sun, sun.target)
+
+  let tod = 0.3
+  const state = { tod }
+  const MORNING = { sun: new THREE.Color('#ffdcae'), sky: new THREE.Color('#e9e2d4') }
+  const NOON = { sun: new THREE.Color('#fffaf0'), sky: new THREE.Color('#eeebe4') }
+  const DUSK = { sun: new THREE.Color('#ff8f5a'), sky: new THREE.Color('#d8bfa6') }
 
   const stone = new THREE.MeshStandardMaterial({ color: '#d9cfbd', roughness: 0.92 })
   const pale = new THREE.MeshStandardMaterial({ color: '#e9e2d3', roughness: 0.9 })
@@ -653,8 +787,17 @@ function buildPavilion(renderer) {
     embed: null,
     dark: false,
     shadows: true,
-    tick(t) {
+    state,
+    tick(t, ctx) {
       sculpture.rotation.y = t * 0.08
+      const goal = ctx.active ? (ctx.pointer.x + 1) / 2 : 0.3
+      tod += (goal - tod) * Math.min(1, ctx.dt * 3)
+      const arc = THREE.MathUtils.lerp(-1.25, 1.25, tod)
+      sun.position.set(C.x + Math.sin(arc) * 34, C.y + 6 + Math.cos(arc) * 26, C.z + 16)
+      sun.color.copy(MORNING.sun).lerp(NOON.sun, Math.min(1, tod * 2)).lerp(DUSK.sun, Math.max(0, tod * 2 - 1))
+      sun.intensity = THREE.MathUtils.lerp(2.3, 3.0, 1 - Math.abs(tod - 0.5) * 2) - Math.max(0, tod - 0.6) * 1.4
+      scene.background.copy(MORNING.sky).lerp(NOON.sky, Math.min(1, tod * 2)).lerp(DUSK.sky, Math.max(0, tod * 2 - 1))
+      state.tod = tod
     },
   }
 }
