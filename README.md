@@ -35,7 +35,10 @@ The build output is a plain static site, so it can be hosted anywhere.
 
 - **Journey:** a viewport at least 960 × 560, motion allowed, and WebGL available.
 - **Linear:** everything else, meaning phones, `prefers-reduced-motion`, or no WebGL. It is a readable column with real captures, and Three.js is never downloaded.
-- `?mode=linear` forces the linear layout.
+- **Opting in or switching:**
+  - With reduced motion on, a "Turn on the 3D journey" button opts in. The choice is remembered.
+  - A window that is too narrow shows a hint, and switches to the journey once it is wide enough.
+  - `?mode=linear` forces the linear layout, and `?mode=journey` forces the journey.
 
 **View all work** in the header links straight to all four live projects, and to each scene.
 

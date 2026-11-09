@@ -28,7 +28,15 @@
           gl = !!(c.getContext('webgl2') || c.getContext('webgl'))
         } catch (e) {}
         var forced = /[?&]mode=linear\b/.test(location.search)
-        root.classList.add(wide && !still && gl && !forced ? 'journey' : 'linear')
+        // Visitors who prefer reduced motion can still opt in to the 3D journey.
+        var optIn = /[?&]mode=journey\b/.test(location.search)
+        try {
+          optIn = optIn || localStorage.getItem('journey') === 'on'
+        } catch (e) {}
+        var journey = wide && gl && !forced && (!still || optIn)
+        root.classList.add(journey ? 'journey' : 'linear')
+        // Why the simple layout is showing, so the page can offer the right fix.
+        if (!journey && gl && !forced) root.dataset.why = !wide ? 'narrow' : 'motion'
       })()
     </script>
     <link rel="stylesheet" href="/src/style.css" />
@@ -111,9 +119,15 @@
             <div class="instrument-fallback__ring">
               <div class="instrument-fallback__glass">
                 <img src="/media/syncdocs-page.webp" alt="" width="1200" height="1057" />
+                <span class="instrument-fallback__iris"></span>
               </div>
             </div>
           </figure>
+          <div class="journey-offer linear-only">
+            <p class="journey-offer__narrow">Widen the window to at least 960px for the 3D version of this page.</p>
+            <p class="journey-offer__motion">You have reduced motion turned on, so this is the simple version.</p>
+            <button class="journey-offer__btn" type="button">Turn on the 3D journey</button>
+          </div>
         </div>
       </section>
 

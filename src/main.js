@@ -9,17 +9,24 @@ for (const line of document.querySelectorAll('.hero__line')) {
   const walk = (node) => {
     for (const child of [...node.childNodes]) {
       if (child.nodeType === Node.TEXT_NODE) {
+        // Letters sit inside a no-wrap word so a line can only break between words.
         const frag = document.createDocumentFragment()
-        for (const ch of child.textContent) {
-          if (ch.trim() === '') {
-            frag.append(ch)
+        for (const part of child.textContent.split(/(\s+)/)) {
+          if (!part) continue
+          if (/^\s+$/.test(part)) {
+            frag.append(part)
             continue
           }
-          const span = document.createElement('span')
-          span.className = 'char'
-          span.style.setProperty('--i', index++)
-          span.textContent = ch
-          frag.append(span)
+          const word = document.createElement('span')
+          word.className = 'word'
+          for (const ch of part) {
+            const span = document.createElement('span')
+            span.className = 'char'
+            span.style.setProperty('--i', index++)
+            span.textContent = ch
+            word.append(span)
+          }
+          frag.append(word)
         }
         child.replaceWith(frag)
       } else walk(child)
@@ -53,6 +60,21 @@ document.addEventListener('click', (e) => {
 panel.addEventListener('click', (e) => {
   if (e.target.closest('a')) setPanel(false)
 })
+
+// Simple layout on a capable desktop: offer the 3D journey.
+document.querySelector('.journey-offer__btn')?.addEventListener('click', () => {
+  try {
+    localStorage.setItem('journey', 'on')
+  } catch (e) {}
+  const url = new URL(location.href)
+  url.searchParams.set('mode', 'journey')
+  location.replace(url)
+})
+// A window that was too narrow switches to the journey once it is wide enough.
+if (root.dataset.why === 'narrow') {
+  const mq = window.matchMedia('(min-width: 960px) and (min-height: 560px)')
+  mq.addEventListener('change', (e) => e.matches && location.reload())
+}
 
 if (root.classList.contains('journey')) {
   import('./journey/index.js')
