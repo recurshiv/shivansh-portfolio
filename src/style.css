@@ -563,8 +563,6 @@ a {
   pointer-events: none;
 }
 .journey .project .card {
-  max-height: calc(100vh - 110px);
-  overflow: auto;
   pointer-events: auto;
   opacity: 0;
   will-change: opacity, transform;
@@ -917,5 +915,30 @@ a {
   .hero__cue {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* Cards are written to fit; on short screens they tighten instead of scrolling. */
+@media (max-height: 820px) {
+  .journey .card {
+    padding: 22px 24px 20px;
+  }
+  .journey .card__title {
+    font-size: clamp(36px, 3.6vw, 50px);
+  }
+  .journey .card__lede {
+    font-size: 16px;
+  }
+  .journey .card__facts {
+    font-size: 13.5px;
+  }
+  .journey .card__facts li {
+    padding: 5px 0 5px 20px;
+  }
+  .journey .card__actions {
+    margin-top: 16px;
+  }
+  .journey .card::before {
+    font-size: 70px;
   }
 }

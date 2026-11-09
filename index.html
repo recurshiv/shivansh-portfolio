@@ -138,26 +138,21 @@
         <article class="card" data-num="01">
           <p class="micro card__eyebrow">01 · Lead project · Full stack</p>
           <h2 id="syncdocs-title" class="card__title">SyncDocs</h2>
-          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Click the scene to write a line and watch it autosave.</p>
-          <p class="card__lede">
-            A rich-text document editor built with MongoDB, Express, React and Node, the groundwork for
-            collaborative writing. Its focus is never losing work.
-          </p>
+          <p class="card__lede">A rich-text document editor on the MERN stack, built so your writing is never lost.</p>
           <ul class="card__facts">
-            <li>Autosave shows “Saved” only after the server confirms; failed saves keep your edits and can be retried.</li>
-            <li>Revision checks reject a stale save instead of overwriting newer text from another tab.</li>
-            <li>Server-side sessions, owner-only documents, and a 24-check end-to-end browser test.</li>
+            <li>“Saved” appears only once the server confirms; failed saves can be retried.</li>
+            <li>Revision checks stop a stale tab from overwriting newer text.</li>
+            <li>Private documents, server-side sessions, 24 end-to-end browser checks.</li>
           </ul>
-          <p class="card__note">Next step: real-time co-editing with Yjs. Today, one editor works on a document at a time.</p>
+          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Click the scene to type a line and watch it autosave.</p>
           <div class="card__actions">
             <a class="btn btn--primary" href="https://syncdocs-lut9.onrender.com/" target="_blank" rel="noopener">
               Open live app <span aria-hidden="true">↗</span>
             </a>
             <a class="btn btn--quiet" href="https://github.com/recurshiv/syncdocs" target="_blank" rel="noopener">Source</a>
           </div>
-          <p class="card__small">Free hosting: the first load after a quiet spell can take up to a minute.</p>
           <figure class="card__media linear-only">
-            <img src="/media/syncdocs-editor.webp" alt="The SyncDocs editor with a lesson plan open and a green Saved status." loading="lazy" width="1600" height="1125" />
+            <img src="/media/syncdocs-editor.webp" alt="The SyncDocs editor with lecture notes on virtual memory and a green Saved status." loading="lazy" width="1600" height="1125" />
             <figcaption>Live app capture: the editor.</figcaption>
           </figure>
         </article>
@@ -171,18 +166,14 @@
         <article class="card" data-num="02">
           <p class="micro card__eyebrow">02 · Hackathon team project</p>
           <h2 id="clipboard-title" class="card__title">Universal Clipboard Sync</h2>
-          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Click the scene to copy: the clip races to the other desktop.</p>
-          <p class="card__lede">
-            An Electron desktop app that sends copied text and images between paired computers over a WebRTC data
-            channel, with a small Node signaling server for pairing. Built with my hackathon team.
-          </p>
-          <h3 class="card__sub">Follow-up work in my fork</h3>
+          <p class="card__lede">An Electron app, built with my hackathon team, that syncs copied text and images between paired computers over WebRTC.</p>
+          <h3 class="card__sub">My follow-up in the fork</h3>
           <ul class="card__facts">
-            <li>Pairing bound to the registered device, with one-time codes and attempt limits.</li>
-            <li>Bounded transfers: 32 KiB text, 10 MiB images in 12 KiB chunks, with send backpressure.</li>
-            <li>Disconnect that stays disconnected and closes the peer; 57 automated tests.</li>
+            <li>Pairing bound to the device, with one-time codes.</li>
+            <li>Bounded transfers: 32 KiB text, 10 MiB images.</li>
+            <li>Clean disconnects; 57 automated tests.</li>
           </ul>
-          <p class="card__note">Two-machine testing on real hardware is still to do. The scene here is an illustration.</p>
+          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Click the scene to copy something new.</p>
           <div class="card__actions">
             <a class="btn btn--primary" href="https://github.com/recurshiv/clipboard_sync" target="_blank" rel="noopener">
               View GitHub fork <span aria-hidden="true">↗</span>
@@ -207,12 +198,9 @@
         <article class="card" data-num="03">
           <p class="micro card__eyebrow">03 · Frontend experiment</p>
           <h2 id="ft-title" class="card__title">Final Transmission</h2>
+          <p class="card__lede">A cinematic landing page set in 3027: a damaged Earth, a ring of debris, and a mission-control interface that reacts as you move.</p>
+          <p class="card__body">Built with React Three Fiber.</p>
           <p class="card__try journey-only"><span aria-hidden="true">✦</span> Move the pointer to turn the planet.</p>
-          <p class="card__lede">
-            A cinematic landing page set in the year 3027: a damaged Earth in orbit, a ring of debris, and a
-            mission-control interface that reacts as you move.
-          </p>
-          <p class="card__body">A study in atmosphere, display typography and real-time 3D, built with React Three Fiber.</p>
           <div class="card__actions">
             <a class="btn btn--primary" href="https://final-transmission.vercel.app" target="_blank" rel="noopener">
               Visit live site <span aria-hidden="true">↗</span>
@@ -233,12 +221,9 @@
         <article class="card" data-num="04">
           <p class="micro card__eyebrow">04 · Frontend experiment</p>
           <h2 id="sp-title" class="card__title">Still Pavilion</h2>
-          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Move the pointer from left to right: morning, noon, dusk.</p>
-          <p class="card__lede">
-            A quiet architectural study. You explore a small pavilion by scrolling and dragging, and switch its
-            material and the time of day.
-          </p>
-          <p class="card__body">Concrete, glass or metal; morning, noon or dusk. Built with React Three Fiber. Nothing to rush.</p>
+          <p class="card__lede">A quiet architectural study: explore a small pavilion by scrolling and dragging, and switch its material and the time of day.</p>
+          <p class="card__body">Built with React Three Fiber.</p>
+          <p class="card__try journey-only"><span aria-hidden="true">✦</span> Move the pointer left to right: morning, noon, dusk.</p>
           <div class="card__actions">
             <a class="btn btn--primary" href="https://still-pavilion.vercel.app" target="_blank" rel="noopener">
               Visit live site <span aria-hidden="true">↗</span>

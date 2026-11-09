@@ -7,7 +7,6 @@ import {
   radialTexture,
   savedPillTexture,
   ghostPageTexture,
-  deviceScreenTexture,
   hudLabelTexture,
 } from './textures.js'
 
@@ -115,20 +114,73 @@ function buildInstrument(env) {
     }),
   )
 
+  // Engraved distance scale, like a cinema lens.
+  const scaleTex = canvasTexture(2048, 128, (c, w, h) => {
+    c.fillStyle = '#0d0e11'
+    c.fillRect(0, 0, w, h)
+    c.fillStyle = '#ece8df'
+    c.textBaseline = 'middle'
+    c.textAlign = 'center'
+    const marks = ['∞', '30', '15', '10', '7', '5', '4', '3', '2.5', '2', '1.7', '1.5', '1.3', '1.2', '1.1', '1 m']
+    marks.forEach((m, i) => {
+      const x = (i + 0.5) * (w / marks.length)
+      c.font = `500 ${m === '∞' ? 54 : 40}px "JetBrains Mono", monospace`
+      c.fillText(m, x, h * 0.42)
+      c.fillRect(x - 1.5, h * 0.78, 3, h * 0.22)
+    })
+    for (let x = 0; x < w; x += w / 64) c.fillRect(x - 1, h * 0.88, 2, h * 0.12)
+  })
+  scaleTex.wrapS = THREE.RepeatWrapping
+  scaleTex.repeat.set(2, 1)
+  scaleTex.colorSpace = THREE.SRGBColorSpace
+  const scaleRing = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.16, 3.16, 0.46, 200, 1, true).rotateX(Math.PI / 2),
+    new THREE.MeshStandardMaterial({ map: scaleTex, metalness: 0.3, roughness: 0.45 }),
+  )
+  scaleRing.position.z = -0.55
+  inst.add(scaleRing)
+  const step = new THREE.Mesh(new THREE.RingGeometry(3.0, 3.2, 160), bright)
+  step.position.z = -0.3
+  inst.add(step)
+  const step2 = new THREE.Mesh(new THREE.TorusGeometry(3.18, 0.035, 10, 200), bright)
+  step2.position.z = -0.82
+  inst.add(step2)
+
   // Knurled focus ring.
   const focus = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 0.9, 160, 1, true).rotateX(Math.PI / 2), rubber)
-  focus.position.z = -0.78
+  focus.position.z = -1.3
   inst.add(focus)
   inst.add(
     ringInstances(180, new THREE.BoxGeometry(0.045, 0.07, 0.86), rubber, (m, i) => {
       const a = (i / 180) * Math.PI * 2
-      m.position.set(Math.cos(a) * 3.22, Math.sin(a) * 3.22, -0.78)
+      m.position.set(Math.cos(a) * 3.22, Math.sin(a) * 3.22, -1.3)
       m.rotation.set(0, 0, a)
     }),
   )
-  const step = new THREE.Mesh(new THREE.RingGeometry(3.0, 3.21, 160), bright)
-  step.position.z = -0.3
-  inst.add(step)
+
+  // Red index dot on the bezel face.
+  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.075, 32), new THREE.MeshBasicMaterial({ color: '#d2382c' }))
+  dot.position.set(0, 3.06, 0.425)
+  inst.add(dot)
+
+  // Front element: a thin glass dome that only shows reflections.
+  const SAG = 0.32
+  const RS = (R * R + SAG * SAG) / (2 * SAG)
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(RS, 128, 24, 0, Math.PI * 2, 0, Math.asin(R / RS)).rotateX(Math.PI / 2),
+    new THREE.MeshPhysicalMaterial({
+      color: '#ffffff',
+      metalness: 0,
+      roughness: 0.04,
+      clearcoat: 1,
+      transparent: true,
+      opacity: 0.14,
+      envMapIntensity: 2.2,
+      depthWrite: false,
+    }),
+  )
+  dome.position.z = SAG - RS + 0.01
+  inst.add(dome)
 
   // Barrel and bands.
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(3.02, 3.02, 4.6, 160, 1, true).rotateX(Math.PI / 2), satin)
@@ -185,7 +237,11 @@ function buildInstrument(env) {
     portal,
     embed: embed(G, 0.1, inst.quaternion),
     dark: false,
-    tick() {},
+    tick() {
+      // The glass fades as the camera reaches it, so nothing sits between it and the next scene.
+      dome.material.opacity = 0.14 * portal.uniforms.uFade.value
+      dome.visible = dome.material.opacity > 0.005
+    },
   }
 }
 
@@ -248,11 +304,11 @@ function buildSyncDocs(renderer) {
   writing.position.set(0.15, -2.35, PAGE_Z + 0.042)
   scene.add(writing)
   const pool = [
-    'Homework: worksheet 3B, questions 1 to 6.',
-    'Bring fraction strips for Thursday.',
-    'Extension: order 7/8, 5/6 and 3/4.',
-    'Recap quiz next Monday.',
-    'Pairs explain their answer to the class.',
+    'Context switch: save registers, swap the page table.',
+    'Thrashing: too many faults, too little RAM.',
+    'Lab: measure the TLB size with a timing loop.',
+    'Read OSTEP chapters 18 to 20 before Friday.',
+    'Huge pages mean fewer TLB entries per GB.',
   ]
   const doc = { lines: [], typing: null, chars: 0, status: 'saved', since: 0, nextLine: 0, auto: false, caret: true, dirty: true }
   function drawInk() {
@@ -420,111 +476,292 @@ const signalFragment = /* glsl */ `
   void main() {
     float s = vUv.x * uLength;
     float dash = smoothstep(0.55, 1.0, fract(s * 0.35 - uTime * 0.9));
-    vec3 col = mix(uColor * 0.55, vec3(0.92, 0.95, 1.0), dash);
+    vec3 col = mix(uColor * 0.7, vec3(0.92, 0.95, 1.0), dash);
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }
+`
+// Floor: fine grid that fades out, with a soft cobalt pool of light.
+const floorVertex = /* glsl */ `
+  varying vec3 vWorld;
+  void main() {
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vWorld = w.xyz;
+    gl_Position = projectionMatrix * viewMatrix * w;
+  }
+`
+const floorFragment = /* glsl */ `
+  uniform vec3 uCenter;
+  varying vec3 vWorld;
+  float line(float x, float w) {
+    float f = abs(fract(x) - 0.5);
+    float d = fwidth(x);
+    return 1.0 - smoothstep(w * d, (w + 1.0) * d, 0.5 - f);
+  }
+  void main() {
+    vec2 p = vWorld.xz;
+    float r = length(p - uCenter.xz);
+    float grid = max(line(p.x * 0.5, 1.0), line(p.y * 0.5, 1.0));
+    float fade = exp(-r * 0.035);
+    vec3 base = vec3(0.028, 0.035, 0.075);
+    vec3 col = base + vec3(0.12, 0.17, 0.5) * grid * 0.22 * fade;
+    col += vec3(0.09, 0.13, 0.45) * exp(-r * r * 0.004) * 0.35;
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
   }
 `
 
+const CLIPS = [
+  'Lab at 4 pm, room 204',
+  'git clone github.com/recurshiv/clipboard_sync',
+  'Bring the HDMI adapter',
+  'ssh shivansh@lab-07',
+  'Week 6 notes: paging and the TLB',
+  'Meet at the library, 6:30',
+]
+
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(' ')
+  const lines = []
+  let line = ''
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w
+    if (ctx.measureText(next).width > maxWidth && line) {
+      lines.push(line)
+      line = w
+    } else line = next
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+function drawClipScreen(ctx, w, h, role, current, history) {
+  ctx.fillStyle = '#0d1122'
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = '#141a33'
+  ctx.fillRect(0, 0, w, 70)
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#e9ecf8'
+  ctx.font = '600 28px Inter, system-ui, sans-serif'
+  ctx.fillText('Universal Clipboard', 30, 36)
+  ctx.fillStyle = '#5bd38a'
+  ctx.beginPath()
+  ctx.arc(w - 236, 36, 7, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#a9b3d6'
+  ctx.font = '500 22px "JetBrains Mono", monospace'
+  ctx.fillText(role === 'a' ? 'desk-a → desk-b' : 'desk-b ← desk-a', w - 218, 36)
+
+  const colW = role === 'a' ? w - 60 : 490
+  ctx.fillStyle = '#8f9bc7'
+  ctx.font = '500 19px "JetBrains Mono", monospace'
+  ctx.fillText(role === 'a' ? 'COPIED HERE' : 'RECEIVED', 30, 108)
+  ctx.beginPath()
+  ctx.roundRect(30, 128, colW, 150, 14)
+  ctx.fillStyle = '#1a2347'
+  ctx.fill()
+  ctx.strokeStyle = '#4d66ff'
+  ctx.lineWidth = 3
+  ctx.stroke()
+  ctx.fillStyle = '#f2f4fb'
+  ctx.font = '500 32px Inter, system-ui, sans-serif'
+  wrapText(ctx, current, colW - 52)
+    .slice(0, 2)
+    .forEach((l, i) => ctx.fillText(l, 56, 178 + i * 42))
+  ctx.fillStyle = '#8f9bc7'
+  ctx.font = '500 19px "JetBrains Mono", monospace'
+  ctx.fillText('HISTORY', 30, 318)
+  history.slice(0, 4).forEach((text, i) => {
+    const y = 338 + i * 72
+    ctx.beginPath()
+    ctx.roundRect(30, y, colW, 58, 10)
+    ctx.fillStyle = '#131a33'
+    ctx.fill()
+    ctx.fillStyle = '#5e72e4'
+    ctx.fillRect(48, y + 19, 20, 20)
+    ctx.fillStyle = '#cdd3e8'
+    ctx.font = '400 24px Inter, system-ui, sans-serif'
+    const t = text.length > 34 ? `${text.slice(0, 33)}…` : text
+    ctx.fillText(t, 84, y + 30)
+  })
+  if (role === 'b') {
+    ctx.fillStyle = '#8f9bc7'
+    ctx.font = '500 19px "JetBrains Mono", monospace'
+    ctx.fillText('LAST IMAGE', 560, 108)
+    ctx.strokeStyle = '#4d66ff'
+    ctx.lineWidth = 3
+    ctx.strokeRect(558, 128, 474, 298)
+    ctx.fillStyle = '#a9b3d6'
+    ctx.font = '400 21px "JetBrains Mono", monospace'
+    ctx.fillText('final-transmission.png · 1600×1000', 560, 456)
+  }
+}
+
 function buildClipboard(renderer, env) {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color('#0b0f1f')
+  scene.background = new THREE.Color('#070a16')
   scene.environment = env
-  scene.environmentIntensity = 0.35
-  scene.add(new THREE.AmbientLight('#8fa2ff', 0.5))
-  const key = new THREE.DirectionalLight('#dfe5ff', 1.4)
-  key.position.set(-6, 10, 8)
-  scene.add(key)
+  scene.environmentIntensity = 0.5
+  scene.add(new THREE.AmbientLight('#8fa2ff', 0.35))
+  const key = new THREE.DirectionalLight('#e6ebff', 1.6)
+  key.position.set(-6, 10, 10)
+  const rimLight = new THREE.DirectionalLight('#4d66ff', 2.2)
+  rimLight.position.set(6, 4, -12)
+  scene.add(key, rimLight)
 
   const Z = -34
-  const grid = new THREE.GridHelper(600, 150, '#25336f', '#18214a')
-  grid.position.y = -3.62
-  scene.add(grid)
+  const FLOOR = -1.32
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(600, 600),
+    new THREE.ShaderMaterial({ uniforms: { uCenter: { value: v(0, FLOOR, Z) } }, vertexShader: floorVertex, fragmentShader: floorFragment }),
+  )
+  floor.rotation.x = -Math.PI / 2
+  floor.position.y = FLOOR
+  scene.add(floor)
 
-  const bezelMat = new THREE.MeshStandardMaterial({ color: '#1a1f33', metalness: 0.7, roughness: 0.35 })
-  const device = (x, ry, role) => {
+  // Drifting dust.
+  const dustN = 500
+  const dust = new Float32Array(dustN * 3)
+  let seed = 3
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  for (let i = 0; i < dustN; i++) {
+    dust[i * 3] = (rand() - 0.5) * 60
+    dust[i * 3 + 1] = FLOOR + rand() * 16
+    dust[i * 3 + 2] = Z + 18 - rand() * 60
+  }
+  const dustGeo = new THREE.BufferGeometry()
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dust, 3))
+  const dustPts = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: '#9fb0ff', size: 0.05, transparent: true, opacity: 0.6 }))
+  scene.add(dustPts)
+
+  const shell = new THREE.MeshStandardMaterial({ color: '#4a4f5c', metalness: 0.9, roughness: 0.32 })
+  const bezel = new THREE.MeshStandardMaterial({ color: '#0c0e14', metalness: 0.4, roughness: 0.4 })
+  const keysTex = canvasTexture(
+    512,
+    200,
+    (c, w, h) => {
+      c.fillStyle = '#20232b'
+      c.fillRect(0, 0, w, h)
+      c.fillStyle = '#121419'
+      for (let r = 0; r < 5; r++) for (let k = 0; k < 14; k++) c.fillRect(8 + k * 35.5, 8 + r * 37, 30, 31)
+    },
+    renderer,
+  )
+  const glowTex = radialTexture('rgba(77,102,255,0.55)', 'rgba(77,102,255,0)')
+
+  const screens = {}
+  const laptop = (x, ry, role) => {
     const g = new THREE.Group()
-    g.position.set(x, 0, Z)
+    g.position.set(x, FLOOR + 0.08, Z)
     g.rotation.y = ry
-    const body = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.5, 0.18), bezelMat)
-    const screen = new THREE.Mesh(
-      new THREE.PlaneGeometry(5.1, 3.16),
-      new THREE.MeshBasicMaterial({ map: deviceScreenTexture(role, renderer) }),
+    const base = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.16, 3.7), shell)
+    const keys = new THREE.Mesh(new THREE.PlaneGeometry(4.9, 1.9), new THREE.MeshBasicMaterial({ map: keysTex }))
+    keys.rotation.x = -Math.PI / 2
+    keys.position.set(0, 0.081, -0.45)
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.0), new THREE.MeshStandardMaterial({ color: '#3b404c', metalness: 0.8, roughness: 0.25 }))
+    pad.rotation.x = -Math.PI / 2
+    pad.position.set(0, 0.082, 1.15)
+    g.add(base, keys, pad)
+
+    const lid = new THREE.Group()
+    lid.position.set(0, 0.08, -1.82)
+    lid.rotation.x = -0.16
+    const back = new THREE.Mesh(new THREE.BoxGeometry(5.6, 3.6, 0.1), shell)
+    back.position.y = 1.8
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(5.56, 3.56), bezel)
+    front.position.set(0, 1.8, 0.051)
+    const tex = canvasTexture(1060, 660, () => {}, renderer)
+    const display = new THREE.Mesh(new THREE.PlaneGeometry(5.3, 3.3), new THREE.MeshBasicMaterial({ map: tex }))
+    display.position.set(0, 1.86, 0.053)
+    const flash = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.3, 3.3),
+      new THREE.MeshBasicMaterial({ color: '#4d66ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
     )
-    screen.position.z = 0.095
-    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.9, 0.2), bezelMat)
-    neck.position.set(0, -2.6, -0.15)
-    const base = new THREE.Mesh(new THREE.BoxGeometry(2, 0.12, 1.2), bezelMat)
-    base.position.set(0, -3.55, 0.1)
-    g.add(body, screen, neck, base)
+    flash.position.set(0, 1.86, 0.056)
+    lid.add(back, front, display, flash)
+    g.add(lid)
+
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(12, 9), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))
+    pool.rotation.x = -Math.PI / 2
+    pool.position.set(0, -0.07, -0.6)
+    g.add(pool)
     scene.add(g)
+    screens[role] = { group: g, lid, display, tex, flash }
     return g
   }
-  device(-4.3, 0.28, 'a')
-  const deviceB = device(4.3, -0.28, 'b')
-  const flash = new THREE.Mesh(
-    new THREE.PlaneGeometry(5.1, 3.16),
-    new THREE.MeshBasicMaterial({ color: '#4d66ff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
-  )
-  flash.position.z = 0.1
-  deviceB.add(flash)
+  laptop(-4.5, 0.32, 'a')
+  laptop(4.5, -0.32, 'b')
+  scene.updateMatrixWorld(true)
 
-  // Receiver: a mast with a display. The display is the next portal.
-  const RX = v(15, 6.5, -74)
-  const recv = new THREE.Group()
-  recv.position.copy(RX)
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 0.3), bezelMat)
-  frame.position.z = -0.16
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 12, 24), bezelMat)
-  mast.position.set(0, -7.2, -0.3)
-  const dish = new THREE.Mesh(
-    new THREE.SphereGeometry(1.1, 48, 16, 0, Math.PI * 2, 0, Math.PI / 3.2),
-    new THREE.MeshStandardMaterial({ color: '#6f7894', metalness: 0.55, roughness: 0.5, side: THREE.DoubleSide }),
-  )
-  dish.rotation.x = -Math.PI / 2.6
-  dish.position.set(0, 2.1, -0.4)
-  recv.add(frame, mast, dish)
-  scene.add(recv)
+  // The received-image slot on desk-b's screen is the portal to the next scene.
+  const portal = createPortal({ shape: 'rect', width: 2.35, height: 1.47, corner: 0.02, smoke: 0.04, tint: '#0a0d0a', rim: 0.2, rimColor: '#4d66ff', sheen: 0 })
+  portal.mesh.position.set((795 - 530) * 0.005, 1.86 + (330 - 277) * 0.005, 0.057)
+  screens.b.lid.add(portal.mesh)
+  scene.updateMatrixWorld(true)
+  const portalP = portal.mesh.getWorldPosition(new THREE.Vector3())
+  const portalQ = portal.mesh.getWorldQuaternion(new THREE.Quaternion())
 
-  const portal = createPortal({
-    shape: 'rect',
-    width: 3.2,
-    height: 2.0,
-    corner: 0.05,
-    smoke: 0.08,
-    tint: '#0a0d0a',
-    rim: 0.7,
-    rimColor: '#3d57e6',
-    sheen: 0.45,
-  })
-  portal.mesh.position.set(RX.x, RX.y, RX.z + 0.002)
-  scene.add(portal.mesh)
-
-  // The signal: device A to device B, then on to the receiver.
-  const signalMat = (length) =>
+  // Signal arc between the two screens.
+  const from = screens.a.lid.localToWorld(v(2.55, 3.2, 0.1))
+  const to = screens.b.lid.localToWorld(v(-2.55, 3.2, 0.1))
+  const arc = new THREE.CatmullRomCurve3([from, v(-1.6, 5.4, Z + 0.4), v(1.6, 5.4, Z + 0.4), to])
+  const signal = new THREE.Mesh(
+    new THREE.TubeGeometry(arc, 200, 0.035, 8),
     new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uLength: { value: length }, uColor: { value: new THREE.Color('#3d57e6') } },
+      uniforms: { uTime: { value: 0 }, uLength: { value: arc.getLength() }, uColor: { value: new THREE.Color('#4d66ff') } },
       vertexShader: signalVertex,
       fragmentShader: signalFragment,
-    })
-  const curves = [
-    new THREE.CatmullRomCurve3([v(-1.9, 1.75, Z + 0.5), v(-0.8, 3.4, Z), v(0.8, 3.4, Z), v(1.9, 1.75, Z + 0.5)]),
-    new THREE.CatmullRomCurve3([v(6.6, 1.2, Z - 0.6), v(9.5, 3, Z - 10), v(12.5, 5, Z - 26), v(15, 5.2, RX.z - 0.2)]),
-  ]
-  const signals = curves.map((c) => {
-    const m = new THREE.Mesh(new THREE.TubeGeometry(c, 160, 0.04, 8), signalMat(c.getLength()))
-    scene.add(m)
-    return m
-  })
-  const pulses = []
-  const pulseMat = new THREE.MeshBasicMaterial({ color: '#e9edff' })
-  let burst = 0
-  let phase = 0
-  let flashAt = 0
-  for (let i = 0; i < 8; i++) {
-    const p = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), pulseMat)
-    scene.add(p)
-    pulses.push(p)
+    }),
+  )
+  const halo = new THREE.Mesh(
+    new THREE.TubeGeometry(arc, 200, 0.16, 12),
+    new THREE.MeshBasicMaterial({ color: '#4d66ff', transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }),
+  )
+  scene.add(signal, halo)
+
+  // The clip itself: a glowing card that flies along the arc.
+  const clipTex = canvasTexture(640, 150, () => {}, renderer)
+  const clip = new THREE.Group()
+  const clipCard = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.49), new THREE.MeshBasicMaterial({ map: clipTex, transparent: true, depthWrite: false }))
+  const clipGlow = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.6), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))
+  clipGlow.position.z = -0.01
+  clip.add(clipGlow, clipCard)
+  clip.visible = false
+  scene.add(clip)
+
+  const state = { index: 0, received: 0, historyA: [], historyB: [], flight: null, lastCopy: -10, flashA: -10, flashB: -10 }
+  function redraw(role) {
+    const s = screens[role]
+    const ctx = s.tex.image.getContext('2d')
+    if (role === 'a') drawClipScreen(ctx, 1060, 660, 'a', CLIPS[state.index], state.historyA)
+    else drawClipScreen(ctx, 1060, 660, 'b', CLIPS[state.received], state.historyB)
+    s.tex.needsUpdate = true
+  }
+  function drawClip(text) {
+    const c = clipTex.image.getContext('2d')
+    c.clearRect(0, 0, 640, 150)
+    c.beginPath()
+    c.roundRect(4, 4, 632, 142, 26)
+    c.fillStyle = '#f4f6ff'
+    c.fill()
+    c.fillStyle = '#1b2350'
+    c.font = '600 40px Inter, system-ui, sans-serif'
+    c.textBaseline = 'middle'
+    const t = text.length > 24 ? `${text.slice(0, 23)}…` : text
+    c.fillText(t, 34, 78)
+    clipTex.needsUpdate = true
+  }
+  redraw('a')
+  redraw('b')
+
+  function copy(t) {
+    state.historyA.unshift(CLIPS[state.index])
+    state.index = (state.index + 1) % CLIPS.length
+    redraw('a')
+    drawClip(CLIPS[state.index])
+    state.flight = { start: t, index: state.index }
+    state.lastCopy = t
+    state.flashA = t
   }
 
   return {
@@ -533,24 +770,34 @@ function buildClipboard(renderer, env) {
     near: 0.05,
     far: 900,
     portal,
-    target: v(0, 0, Z),
-    embed: embed(portal.mesh.position, 3.2 / 32),
+    target: v(0, 1.6, Z),
+    embed: embed(portalP, 2.35 / 32, portalQ),
     dark: true,
     tick(t, ctx) {
-      if (ctx.active && ctx.clicks) {
-        burst = 1
-        flashAt = t + 0.55
+      // Copy something new on click, and every few seconds on its own.
+      if (ctx.active && (ctx.clicks || t - state.lastCopy > 4.2) && !state.flight) copy(t)
+      signal.material.uniforms.uTime.value = t * (state.flight ? 3 : 1)
+      dustPts.rotation.y = t * 0.01
+      if (state.flight) {
+        const u = (t - state.flight.start) / 1.3
+        if (u >= 1) {
+          state.historyB.unshift(CLIPS[state.received])
+          state.received = state.flight.index
+          redraw('b')
+          state.flight = null
+          state.flashB = t
+          clip.visible = false
+        } else {
+          const e = u * u * (3 - 2 * u)
+          clip.visible = true
+          clip.position.copy(arc.getPointAt(e))
+          clip.position.y += 0.35
+          clip.scale.setScalar(0.6 + Math.sin(Math.PI * e) * 0.6)
+        }
       }
-      burst = Math.max(0, burst - ctx.rawDt * 0.6)
-      phase += ctx.rawDt * 0.16 * (1 + burst * 6)
-      flash.material.opacity = flashAt ? 0.55 * Math.exp(-Math.max(0, t - flashAt) * 3) * (t > flashAt ? 1 : 0) : 0
-      for (const s of signals) s.material.uniforms.uTime.value = phase * 6
-      pulses.forEach((p, i) => {
-        const u = (((phase + i / pulses.length) % 1) + 1) % 1
-        // First 30% of the cycle crosses between the devices, the rest flies to the receiver.
-        const pt = u < 0.3 ? curves[0].getPointAt(u / 0.3) : curves[1].getPointAt((u - 0.3) / 0.7)
-        p.position.copy(pt)
-      })
+      screens.a.flash.material.opacity = 0.35 * Math.exp(-Math.max(0, t - state.flashA) * 4)
+      screens.b.flash.material.opacity = 0.45 * Math.exp(-Math.max(0, t - state.flashB) * 3)
+      halo.material.opacity = 0.1 + (state.flight ? 0.12 : 0)
     },
   }
 }
@@ -559,11 +806,67 @@ function buildClipboard(renderer, env) {
 /* World 3: Final Transmission                                          */
 /* ------------------------------------------------------------------ */
 
+const planetVertex = /* glsl */ `
+  varying vec3 vN;
+  varying vec3 vWorld;
+  void main() {
+    vN = normal;
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vWorld = w.xyz;
+    gl_Position = projectionMatrix * viewMatrix * w;
+  }
+`
+const planetFragment = /* glsl */ `
+  uniform float uRot;
+  uniform float uTilt;
+  uniform float uTime;
+  uniform vec3 uSpot;
+  varying vec3 vN;
+  varying vec3 vWorld;
+
+  float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+  float noise(vec3 p) {
+    vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+  }
+  float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * noise(p); p *= 2.03; a *= 0.5; } return s; }
+
+  void main() {
+    vec3 n = normalize(vN);
+    float cy = cos(uRot), sy = sin(uRot), cx = cos(uTilt), sx = sin(uTilt);
+    vec3 p = vec3(cy * n.x + sy * n.z, n.y, -sy * n.x + cy * n.z);
+    p = vec3(p.x, cx * p.y - sx * p.z, sx * p.y + cx * p.z);
+
+    float c = fbm(p * 2.1);
+    float land = smoothstep(0.47, 0.53, c);
+    vec3 col = mix(vec3(0.01, 0.02, 0.015), vec3(0.06, 0.11, 0.045), land);
+    float ridge = 1.0 - abs(fbm(p * 4.5 + 3.1) * 2.0 - 1.0);
+    col = mix(col, vec3(1.0, 0.32, 0.12), smoothstep(0.955, 0.992, ridge) * land);
+    float clouds = smoothstep(0.56, 0.78, fbm(p * 3.2 + vec3(uTime * 0.015)));
+    col = mix(col, vec3(0.5, 0.56, 0.46), clouds * 0.3);
+
+    float lit = clamp(dot(n, normalize(vec3(-0.5, 0.45, 0.75))) * 0.9 + 0.25, 0.08, 1.0);
+    col *= lit;
+
+    // A fixed bright patch of cloud: the way through to the next scene.
+    float d = dot(n, uSpot) + (fbm(n * 7.0 + uTime * 0.02) - 0.5) * 0.035;
+    float spot = smoothstep(0.935, 0.975, d);
+    col = mix(col, vec3(1.0, 0.985, 0.95), spot);
+    col += vec3(1.0, 0.95, 0.85) * smoothstep(0.86, 0.975, d) * 0.25;
+
+    vec3 V = normalize(cameraPosition - vWorld);
+    float fr = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+    col += vec3(0.45, 0.8, 0.3) * fr * 0.55;
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }
+`
+
 function buildFinalTransmission(renderer) {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color('#080b08')
+  scene.background = new THREE.Color('#060906')
 
-  // Stars.
   const n = 2600
   const pos = new Float32Array(n * 3)
   let seed = 7
@@ -571,107 +874,89 @@ function buildFinalTransmission(renderer) {
   for (let i = 0; i < n; i++) {
     pos[i * 3] = (rand() - 0.5) * 700
     pos[i * 3 + 1] = (rand() - 0.5) * 450
-    pos[i * 3 + 2] = -60 - rand() * 600
+    pos[i * 3 + 2] = -70 - rand() * 600
   }
   const starGeo = new THREE.BufferGeometry()
   starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
   scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: '#cfd8bf', size: 1.1, sizeAttenuation: true })))
 
-  // Planet sketch echoing the site.
-  const planet = new THREE.Group()
-  planet.position.set(-30, 12, -120)
-  planet.add(
-    new THREE.Mesh(
-      new THREE.SphereGeometry(10, 36, 24),
-      new THREE.MeshBasicMaterial({ color: '#4f6b33', wireframe: true, transparent: true, opacity: 0.35 }),
-    ),
-  )
-  const orbit = new THREE.Mesh(new THREE.TorusGeometry(15, 0.12, 8, 240), new THREE.MeshBasicMaterial({ color: '#ff6a3d' }))
-  orbit.rotation.set(1.25, 0.2, 0.3)
-  planet.add(orbit)
-  scene.add(planet)
-
   // The site capture on a large display.
-  const SCREEN = v(0, 0.6, -48)
-  const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(16, 10),
-    new THREE.MeshBasicMaterial({ map: imageTexture('/media/final-transmission.webp', renderer) }),
-  )
+  const SCREEN = v(-1, 0.4, -48)
+  const SW = 15
+  const SH = 9.375
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.MeshBasicMaterial({ map: imageTexture('/media/final-transmission.webp', renderer) }))
   screen.position.copy(SCREEN)
   scene.add(screen)
   const lime = new THREE.LineBasicMaterial({ color: '#d4f25c' })
   const corners = []
   for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-    const cx = SCREEN.x + sx * 8.4
-    const cy = SCREEN.y + sy * 5.4
+    const cx = SCREEN.x + sx * (SW / 2 + 0.4)
+    const cy = SCREEN.y + sy * (SH / 2 + 0.4)
     corners.push(cx, cy - sy * 1.1, SCREEN.z, cx, cy, SCREEN.z, cx, cy, SCREEN.z, cx - sx * 1.1, cy, SCREEN.z)
   }
   const cornerGeo = new THREE.BufferGeometry()
   cornerGeo.setAttribute('position', new THREE.Float32BufferAttribute(corners, 3))
   scene.add(new THREE.LineSegments(cornerGeo, lime))
-
   const label = new THREE.Mesh(
     new THREE.PlaneGeometry(9, 0.5625),
     new THREE.MeshBasicMaterial({ map: hudLabelTexture('SIGNAL 03 · FINAL TRANSMISSION · 3027', '#d4f25c', renderer), transparent: true }),
   )
-  label.position.set(SCREEN.x - 3.5, SCREEN.y + 6.1, SCREEN.z)
+  label.position.set(SCREEN.x - 3, SCREEN.y + SH / 2 + 1.1, SCREEN.z)
   scene.add(label)
 
-  const FLOOR_Y = -5.2
-  const grid = new THREE.GridHelper(600, 120, '#1f2b17', '#151d10')
-  grid.position.y = FLOOR_Y
-  scene.add(grid)
-
-  // The bright opening.
-  const DOOR = v(11.2, FLOOR_Y + 2.2, -50)
-  const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(10, 12),
-    new THREE.MeshBasicMaterial({
-      map: radialTexture('rgba(255,244,222,0.55)', 'rgba(255,244,222,0)'),
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
-  )
-  glow.position.set(DOOR.x, DOOR.y, DOOR.z - 0.05)
-  scene.add(glow)
-  const spill = new THREE.Mesh(
-    new THREE.PlaneGeometry(4, 16),
-    new THREE.MeshBasicMaterial({
-      map: radialTexture('rgba(255,240,214,0.35)', 'rgba(255,240,214,0)'),
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
-  )
-  spill.rotation.x = -Math.PI / 2
-  spill.position.set(DOOR.x, FLOOR_Y + 0.01, DOOR.z + 6)
-  scene.add(spill)
-  const jambMat = new THREE.MeshBasicMaterial({ color: '#fff4de' })
-  for (const [w, h, x, y] of [
-    [0.08, 4.5, -1.24, 0],
-    [0.08, 4.5, 1.24, 0],
-    [2.56, 0.08, 0, 2.24],
-  ]) {
-    const jamb = new THREE.Mesh(new THREE.PlaneGeometry(w, h), jambMat)
-    jamb.position.set(DOOR.x + x, DOOR.y + y, DOOR.z + 0.001)
-    scene.add(jamb)
-  }
-
-  const portal = createPortal({
-    shape: 'rect',
-    width: 2.4,
-    height: 4.4,
-    corner: 0,
-    smoke: 0.1,
-    tint: '#fff6e4',
-    rim: 0.5,
-    rimColor: '#ffe9c2',
-    sheen: 0,
+  // The planet. A bright patch of cloud on it is the way into the next scene.
+  const PC = v(13, 8.5, -70)
+  const PR = 7
+  const spotDir = new THREE.Vector3(-0.45, 0.15, 0.88).normalize()
+  const planetMat = new THREE.ShaderMaterial({
+    uniforms: { uRot: { value: 0 }, uTilt: { value: 0 }, uTime: { value: 0 }, uSpot: { value: spotDir } },
+    vertexShader: planetVertex,
+    fragmentShader: planetFragment,
   })
-  portal.mesh.position.set(DOOR.x, DOOR.y, DOOR.z + 0.002)
-  scene.add(portal.mesh)
+  const planet = new THREE.Mesh(new THREE.SphereGeometry(PR, 128, 96), planetMat)
+  planet.position.copy(PC)
+  scene.add(planet)
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(PR * 1.55, 0.09, 8, 320), new THREE.MeshBasicMaterial({ color: '#ff6a3d' }))
+  ring.position.copy(PC)
+  ring.rotation.set(1.42, 0.35, 0.5)
+  scene.add(ring)
+  const debris = new Float32Array(900 * 3)
+  for (let i = 0; i < 900; i++) {
+    const a = rand() * Math.PI * 2
+    const r = PR * (1.4 + rand() * 0.35)
+    debris[i * 3] = Math.cos(a) * r
+    debris[i * 3 + 1] = (rand() - 0.5) * 0.5
+    debris[i * 3 + 2] = Math.sin(a) * r
+  }
+  const debrisGeo = new THREE.BufferGeometry()
+  debrisGeo.setAttribute('position', new THREE.BufferAttribute(debris, 3))
+  const debrisPts = new THREE.Points(debrisGeo, new THREE.PointsMaterial({ color: '#8fae6a', size: 0.12 }))
+  const debrisGroup = new THREE.Group()
+  debrisGroup.position.copy(PC)
+  debrisGroup.rotation.copy(ring.rotation)
+  debrisGroup.rotateX(Math.PI / 2)
+  debrisGroup.add(debrisPts)
+  scene.add(debrisGroup)
 
+  const PORTAL_R = 1.45
+  const spotQ = new THREE.Quaternion().setFromUnitVectors(v(0, 0, 1), spotDir)
+  // Sit the flat disc where it just touches the sphere at its rim.
+  const lift = PR - Math.sqrt(PR * PR - PORTAL_R * PORTAL_R)
+  const spotP = PC.clone().addScaledVector(spotDir, PR - lift + 0.02)
+  const portal = createPortal({ shape: 'circle', radius: PORTAL_R, smoke: 0.72, tint: '#fffaf0', rim: 0.25, rimColor: '#ffffff', sheen: 0 })
+  portal.mesh.position.copy(spotP)
+  portal.mesh.quaternion.copy(spotQ)
+  scene.add(portal.mesh)
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(PORTAL_R * 5, PORTAL_R * 5),
+    new THREE.MeshBasicMaterial({ map: radialTexture('rgba(255,250,236,0.6)', 'rgba(255,250,236,0)'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+  )
+  glow.position.copy(spotP).addScaledVector(spotDir, 0.05)
+  glow.quaternion.copy(spotQ)
+  scene.add(glow)
+
+  let rot = 0
+  let tilt = 0
   return {
     name: 'final-transmission',
     scene,
@@ -679,14 +964,18 @@ function buildFinalTransmission(renderer) {
     far: 1500,
     portal,
     target: SCREEN.clone(),
-    embed: embed(portal.mesh.position, 2.4 / 24),
+    embed: embed(spotP, PORTAL_R / 12, spotQ),
     dark: true,
     tick(t, ctx) {
       const px = ctx.active ? ctx.pointer.x : 0
       const py = ctx.active ? ctx.pointer.y : 0
-      planet.rotation.y = t * 0.04 + px * 1.1
-      planet.rotation.x = -py * 0.45
-      planet.position.y = 12 + py * 3
+      rot += (px * 1.4 - rot) * Math.min(1, ctx.rawDt * 3)
+      tilt += (-py * 0.5 - tilt) * Math.min(1, ctx.rawDt * 3)
+      planetMat.uniforms.uRot.value = t * 0.03 + rot
+      planetMat.uniforms.uTilt.value = tilt
+      planetMat.uniforms.uTime.value = t
+      debrisPts.rotation.y = t * 0.05 + rot * 0.5
+      glow.material.opacity = 0.85 + Math.sin(t * 1.6) * 0.15
     },
   }
 }
