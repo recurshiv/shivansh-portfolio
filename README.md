@@ -1,6 +1,6 @@
 # Shivansh Pratap Singh: portfolio
 
-A single-page portfolio built as one continuous, reversible camera move. On desktop, scrolling zooms into a glint of light on a vintage TV's glass and comes out on the SyncDocs page. From there it goes through the copy glyph into Universal Clipboard Sync, into the received image on the second laptop for Final Transmission, and through a bright patch of cloud on the planet into Still Pavilion. The page ends with a quiet About section.
+A single-page portfolio built as one continuous, reversible camera move. On desktop, scrolling zooms into a glint of light on a vintage TV's glass and comes out on the SyncDocs page. From there it goes through the copy glyph into Universal Clipboard Sync, into the received image on the second laptop for Final Transmission, and through a lone transmitting beacon on the planet into Still Pavilion. The page ends with a quiet About section.
 
 ## Run
 
@@ -15,7 +15,7 @@ The build output is a plain static site, so it can be hosted anywhere.
 
 ## How the journey works
 
-- **Nested worlds joined by portals** (`src/journey/worlds.js`). Each world contains the next one at a position, rotation and scale. The bridge object (the glint on the TV glass, the copy glyph, the received-image preview on the second laptop, the bright spot on the planet) is a portal. The next world is rendered into a texture by a camera mapped through that embedding, and the portal samples it in screen space. The real next scene is therefore visible inside the bridge object from the start.
+- **Nested worlds joined by portals** (`src/journey/worlds.js`). Each world contains the next one at a position, rotation and scale. The bridge object (the glint on the TV glass, the copy glyph, the received-image preview on the second laptop, the beacon on the planet) is a portal. The next world is rendered into a texture by a camera mapped through that embedding, and the portal samples it in screen space. The real next scene is therefore visible inside the bridge object from the start.
 - **Seamless crossing** (`src/journey/index.js`). When the camera reaches the portal plane, the portal fills the whole view, and rendering switches to the inner world at the equivalent pose. There is no cut, and no scene jump.
 - **Camera path** (`src/journey/track.js`). Scroll maps to a value `g` from 0 to 9: hero, four transitions, four reading dwells. In a transition, the distance to the target object is interpolated in log space, which keeps a constant zoom rate and reads as falling. Each pose is a pure function of `g`, so scrolling back retraces the path exactly.
 - **Portal shader** (`src/journey/portal.js`). It adds smoke, a cobalt rim with edge refraction, and a sheen that follows the viewing angle. A pointer lens clears the smoke, magnifies, and splits colour, and the effect is confined to the aperture.
@@ -25,7 +25,7 @@ The build output is a plain static site, so it can be hosted anywhere.
 - **Scene interactions** (the cursor labels each one):
   - SyncDocs: click to type a line and watch the autosave states (Unsaved changes, then Saving…, then Saved).
   - Clipboard Sync: click to copy something new; the clip flies to the other laptop and its screen updates.
-  - Final Transmission: the planet follows the pointer.
+  - Final Transmission: the planet follows the pointer, and a small beacon on it sends out pulsing signal rings.
   - Still Pavilion: the pointer sets the time of day, from morning to dusk.
 - **Readout.** A live readout shows the scene, the magnification relative to the hero, and the depth.
 - **Text is HTML.** Titles, descriptions and links are semantic HTML laid over the canvas, and never part of the 3D scene.

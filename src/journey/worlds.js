@@ -78,6 +78,9 @@ const screenFragment = /* glsl */ `
     vec3 wash = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + vPos.x * 0.25 + vPos.y * 0.15 + uTime * 1.5));
     col = mix(col, col * wash * 1.8, uDegauss * 0.8);
 
+    // A broad, faint sheen where the glass curves toward the top-right corner.
+    float diag = dot(vPos / uHalf, vec2(0.70710678));
+    col += vec3(0.9, 0.93, 1.0) * smoothstep(0.5, 0.95, diag) * smoothstep(1.45, 1.05, diag) * 0.07;
     // A glint on the glass, which is the way through.
     col = mix(col, tvGlintColor(), tvGlint(vPos - uSpot, uSpotR, uTime));
 
@@ -169,11 +172,11 @@ function buildCRT(env) {
   tv.rotation.set(-0.03, 0.26, 0)
   scene.add(tv)
 
-  const W = 6.2
+  const W = 6.6
   const H = 4.9
-  const SC = new THREE.Vector2(-0.75, 0.15) // screen centre
-  const SW = 4.1
-  const SH = 3.15
+  const SC = new THREE.Vector2(-0.7, 0.15) // screen centre
+  const SW = 3.9
+  const SH = 3.0
 
   const wood = new THREE.MeshPhysicalMaterial({ map: walnutTexture(), roughness: 0.42, clearcoat: 0.7, clearcoatRoughness: 0.25 })
   const black = new THREE.MeshStandardMaterial({ color: '#111216', metalness: 0.2, roughness: 0.35 })
@@ -181,23 +184,49 @@ function buildCRT(env) {
   const brass = new THREE.MeshStandardMaterial({ color: '#b48a4a', metalness: 1, roughness: 0.3 })
 
   // Walnut cabinet with the screen opening, front face at z = 0.3.
-  const outer = roundedRectShape(W, H, 0.55)
-  const hole = roundedRectShape(SW + 0.6, SH + 0.6, 0.62)
-  const holePath = new THREE.Path(hole.getPoints(8).map((p) => new THREE.Vector2(p.x + SC.x, p.y + SC.y)))
-  outer.holes.push(holePath)
+  const outer = roundedRectShape(W, H, 0.85)
+  const hole = roundedRectShape(SW + 0.72, SH + 0.72, 0.68)
+  outer.holes.push(new THREE.Path(hole.getPoints(10).map((p) => new THREE.Vector2(p.x + SC.x, p.y + SC.y))))
   const cabinet = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(outer, { depth: 3.2, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 4, curveSegments: 10 }),
+    new THREE.ExtrudeGeometry(outer, { depth: 3.06, bevelEnabled: true, bevelThickness: 0.17, bevelSize: 0.16, bevelSegments: 6, curveSegments: 14 }),
     wood,
   )
-  cabinet.position.z = -3.0
+  cabinet.position.z = -2.93
   tv.add(cabinet)
 
   // Black mask around the tube, filling the mouth of the opening.
   const maskShape = roundedRectShape(SW + 0.46, SH + 0.46, 0.55)
   maskShape.holes.push(new THREE.Path(roundedRectShape(SW, SH, 0.42).getPoints(10)))
-  const mask = new THREE.Mesh(new THREE.ExtrudeGeometry(maskShape, { depth: 0.26, bevelEnabled: false, curveSegments: 10 }), black)
+  const mask = new THREE.Mesh(new THREE.ExtrudeGeometry(maskShape, { depth: 0.24, bevelEnabled: false, curveSegments: 10 }), black)
   mask.position.set(SC.x, SC.y, 0.0)
   tv.add(mask)
+
+  // Brass trim around the screen opening.
+  const trimPts = roundedRectShape(SW + 0.5, SH + 0.5, 0.58).getPoints(24).map((p) => new THREE.Vector3(p.x + SC.x, p.y + SC.y, 0.25))
+  const trim = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(trimPts, true, 'centripetal'), 400, 0.05, 10, true), brass)
+  tv.add(trim)
+
+  // Tapered rear housing for the tube, seen past the side of the cabinet.
+  const rear = new THREE.BoxGeometry(W * 0.84, H * 0.8, 2.2, 1, 1, 1)
+  const rp = rear.attributes.position
+  for (let i = 0; i < rp.count; i++) {
+    if (rp.getZ(i) < 0) {
+      rp.setX(i, rp.getX(i) * 0.55)
+      rp.setY(i, rp.getY(i) * 0.6)
+    }
+  }
+  rear.computeVertexNormals()
+  const rearMesh = new THREE.Mesh(rear, new THREE.MeshStandardMaterial({ color: '#241a14', roughness: 0.6, metalness: 0.1 }))
+  rearMesh.position.set(0, 0.1, -3.1 - 1.1)
+  tv.add(rearMesh)
+
+  // Ventilation slots along the left side.
+  const vent = new THREE.BoxGeometry(0.04, 0.07, 1.5)
+  for (let i = 0; i < 7; i++) {
+    const s = new THREE.Mesh(vent, black)
+    s.position.set(-W / 2 - 0.15, 1.3 - i * 0.2, -1.9)
+    tv.add(s)
+  }
 
   // The tube face: live static.
   const su = {
@@ -206,8 +235,8 @@ function buildCRT(env) {
     uMagOn: { value: 0 },
     uDegauss: { value: 0 },
     uHalf: { value: new THREE.Vector2(SW / 2, SH / 2) },
-    uSpot: { value: new THREE.Vector2(1.36, 0.98) },
-    uSpotR: { value: 0.16 },
+    uSpot: { value: new THREE.Vector2(1.4, 1.02) },
+    uSpotR: { value: 0.06 },
     uMag: { value: new THREE.Vector2(0, 0) },
   }
   const screen = new THREE.Mesh(
@@ -253,8 +282,8 @@ function buildCRT(env) {
   glowLight.position.set(SC.x, SC.y, 1.3)
   tv.add(glowLight)
 
-  // Control panel: brushed plate, channel dial, volume knob, power light, speaker slats.
-  const PX = 2.22
+  // Control panel: brushed plate, channel dial, volume knob, power light, speaker cloth.
+  const PX = 2.42
   const dials = [
     { y: 1.25, r: 0.46, label: 'CHANNEL', numbers: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'] },
     { y: 0.05, r: 0.3, label: 'VOLUME' },
@@ -272,34 +301,48 @@ function buildCRT(env) {
   plate.position.set(PX, 0, 0.31)
   tv.add(plate)
 
+  const ribbed = new THREE.MeshStandardMaterial({ color: '#15161a', metalness: 0.25, roughness: 0.4, flatShading: true })
   const dial = new THREE.Group()
   dial.position.set(PX, dials[0].y, 0.31)
-  const dialBody = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.31, 0.32, 48).rotateX(Math.PI / 2), black)
+  const dialBody = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.31, 0.32, 28).rotateX(Math.PI / 2), ribbed)
   dialBody.position.z = 0.16
-  const dialCap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 48).rotateX(Math.PI / 2), chrome)
-  dialCap.position.z = 0.33
-  const pointerMark = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.2, 0.02), new THREE.MeshBasicMaterial({ color: '#f2ede3' }))
-  pointerMark.position.set(0, 0.2, 0.33)
+  const dialCap = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.23, 0.05, 48).rotateX(Math.PI / 2), brass)
+  dialCap.position.z = 0.34
+  const pointerMark = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.18, 0.02), new THREE.MeshBasicMaterial({ color: '#f2ede3' }))
+  pointerMark.position.set(0, 0.17, 0.37)
   dial.add(dialBody, dialCap, pointerMark)
   tv.add(dial)
 
-  const vol = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.22, 40).rotateX(Math.PI / 2), black)
+  const vol = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.22, 22).rotateX(Math.PI / 2), ribbed)
   vol.position.set(PX, dials[1].y, 0.42)
-  const volMark = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.02), new THREE.MeshBasicMaterial({ color: '#f2ede3' }))
-  volMark.position.set(PX + 0.07, dials[1].y + 0.08, 0.535)
-  volMark.rotation.z = -0.7
-  tv.add(vol, volMark)
+  const volCap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.14, 0.04, 40).rotateX(Math.PI / 2), brass)
+  volCap.position.set(PX, dials[1].y, 0.54)
+  tv.add(vol, volCap)
 
-  const led = new THREE.Mesh(new THREE.CircleGeometry(0.055, 24), new THREE.MeshBasicMaterial({ color: '#2340d6' }))
+  const led = new THREE.Mesh(new THREE.CircleGeometry(0.05, 24), new THREE.MeshBasicMaterial({ color: '#2340d6' }))
   led.position.set(PX, -0.62, 0.32)
-  tv.add(led)
+  const ledRing = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.015, 8, 32), chrome)
+  ledRing.position.set(PX, -0.62, 0.32)
+  tv.add(led, ledRing)
 
-  const slat = new THREE.BoxGeometry(0.8, 0.055, 0.04)
-  for (let i = 0; i < 8; i++) {
-    const s = new THREE.Mesh(slat, black)
-    s.position.set(PX, -1.0 - i * 0.13, 0.33)
-    tv.add(s)
-  }
+  // Woven speaker cloth in a brass frame.
+  const cloth = canvasTexture(256, 384, (c, w, h) => {
+    c.fillStyle = '#c9b48f'
+    c.fillRect(0, 0, w, h)
+    for (let y = 0; y < h; y += 4) {
+      c.fillStyle = y % 8 ? 'rgba(90,70,45,0.35)' : 'rgba(255,245,220,0.25)'
+      c.fillRect(0, y, w, 2)
+    }
+    for (let x = 0; x < w; x += 4) {
+      c.fillStyle = x % 8 ? 'rgba(90,70,45,0.25)' : 'rgba(255,245,220,0.18)'
+      c.fillRect(x, 0, 2, h)
+    }
+  })
+  const grille = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 1.15), new THREE.MeshStandardMaterial({ map: cloth, roughness: 0.95 }))
+  grille.position.set(PX, -1.4, 0.322)
+  tv.add(grille)
+  const gPts = roundedRectShape(0.86, 1.19, 0.06).getPoints(6).map((p) => new THREE.Vector3(p.x + PX, p.y - 1.4, 0.325))
+  tv.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(gPts, true), 120, 0.022, 8, true), brass))
 
   // Tapered legs with brass feet.
   for (const [x, z] of [[-2.45, -0.4], [2.45, -0.4], [-2.45, -2.5], [2.45, -2.5]]) {
@@ -981,6 +1024,7 @@ const planetFragment = /* glsl */ `
   uniform float uTilt;
   uniform float uTime;
   uniform vec3 uSpot;
+  uniform float uSpotA;
   varying vec3 vN;
   varying vec3 vWorld;
 
@@ -1009,11 +1053,18 @@ const planetFragment = /* glsl */ `
     float lit = clamp(dot(n, normalize(vec3(-0.5, 0.45, 0.75))) * 0.9 + 0.25, 0.08, 1.0);
     col *= lit;
 
-    // A fixed bright patch of cloud: the way through to the next scene.
-    float d = dot(n, uSpot) + (fbm(n * 7.0 + uTime * 0.02) - 0.5) * 0.035;
-    float spot = smoothstep(0.935, 0.975, d);
-    col = mix(col, vec3(1.0, 0.985, 0.95), spot);
-    col += vec3(1.0, 0.95, 0.85) * smoothstep(0.86, 0.975, d) * 0.25;
+    // A lone beacon still transmitting: a warm point of light with lime
+    // signal rings pulsing out across the surface. It is the way through.
+    float a = acos(clamp(dot(n, uSpot), -1.0, 1.0));
+    float core = 1.0 - smoothstep(uSpotA * 0.92, uSpotA, a);
+    col += vec3(1.0, 0.86, 0.6) * exp(-max(a - uSpotA, 0.0) / (uSpotA * 0.9)) * 0.55;
+    col += vec3(1.0, 0.7, 0.4) * exp(-max(a - uSpotA, 0.0) / (uSpotA * 3.5)) * 0.12;
+    for (int i = 0; i < 3; i++) {
+      float ph = fract(uTime * 0.28 + float(i) / 3.0);
+      float rr = mix(uSpotA * 1.3, uSpotA * 7.0, ph);
+      col += vec3(0.83, 0.95, 0.36) * exp(-pow((a - rr) / (uSpotA * 0.12), 2.0)) * (1.0 - ph) * (1.0 - ph) * 0.8;
+    }
+    col = mix(col, vec3(1.0, 0.957, 0.87), core);
 
     vec3 V = normalize(cameraPosition - vWorld);
     float fr = pow(1.0 - max(dot(n, V), 0.0), 3.0);
@@ -1064,12 +1115,12 @@ function buildFinalTransmission(renderer) {
   label.position.set(SCREEN.x - 3, SCREEN.y + SH / 2 + 1.1, SCREEN.z)
   scene.add(label)
 
-  // The planet. A bright patch of cloud on it is the way into the next scene.
+  // The planet. A small beacon on it is the way into the next scene.
   const PC = v(13, 8.5, -70)
   const PR = 7
   const spotDir = new THREE.Vector3(-0.45, 0.15, 0.88).normalize()
   const planetMat = new THREE.ShaderMaterial({
-    uniforms: { uRot: { value: 0 }, uTilt: { value: 0 }, uTime: { value: 0 }, uSpot: { value: spotDir } },
+    uniforms: { uRot: { value: 0 }, uTilt: { value: 0 }, uTime: { value: 0 }, uSpot: { value: spotDir }, uSpotA: { value: 0 } },
     vertexShader: planetVertex,
     fragmentShader: planetFragment,
   })
@@ -1098,23 +1149,16 @@ function buildFinalTransmission(renderer) {
   debrisGroup.add(debrisPts)
   scene.add(debrisGroup)
 
-  const PORTAL_R = 1.45
+  const PORTAL_R = 0.42
+  planetMat.uniforms.uSpotA.value = Math.asin(PORTAL_R / PR)
   const spotQ = new THREE.Quaternion().setFromUnitVectors(v(0, 0, 1), spotDir)
   // Sit the flat disc where it just touches the sphere at its rim.
   const lift = PR - Math.sqrt(PR * PR - PORTAL_R * PORTAL_R)
   const spotP = PC.clone().addScaledVector(spotDir, PR - lift + 0.02)
-  const portal = createPortal({ shape: 'circle', radius: PORTAL_R, smoke: 0.72, tint: '#fffaf0', rim: 0.25, rimColor: '#ffffff', sheen: 0 })
+  const portal = createPortal({ shape: 'circle', radius: PORTAL_R, smoke: 0.97, tint: '#fff4de', rim: 0, sheen: 0 })
   portal.mesh.position.copy(spotP)
   portal.mesh.quaternion.copy(spotQ)
   scene.add(portal.mesh)
-  const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(PORTAL_R * 5, PORTAL_R * 5),
-    new THREE.MeshBasicMaterial({ map: radialTexture('rgba(255,250,236,0.6)', 'rgba(255,250,236,0)'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-  )
-  glow.position.copy(spotP).addScaledVector(spotDir, 0.05)
-  glow.quaternion.copy(spotQ)
-  scene.add(glow)
-
   let rot = 0
   let tilt = 0
   return {
@@ -1135,7 +1179,6 @@ function buildFinalTransmission(renderer) {
       planetMat.uniforms.uTilt.value = tilt
       planetMat.uniforms.uTime.value = t
       debrisPts.rotation.y = t * 0.05 + rot * 0.5
-      glow.material.opacity = 0.85 + Math.sin(t * 1.6) * 0.15
     },
   }
 }

@@ -198,7 +198,9 @@ a {
 }
 .hero__line {
   overflow: hidden;
-  padding-bottom: 0.06em;
+  /* Room for the italic g's descender and overhang; the negative margin keeps the line spacing. */
+  padding: 0 0.12em 0.24em 0;
+  margin-bottom: -0.18em;
 }
 .hero__line .word {
   display: inline-block;

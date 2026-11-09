@@ -38,19 +38,20 @@ export const STATIC_GLSL = /* glsl */ `
   vec3 tvGlintColor() {
     return vec3(1.0, 0.99, 0.965);
   }
-  // A reflection on the curved glass: a round hot core of radius r (the portal),
-  // a halo stretched along the corner diagonal, and two thin light streaks.
+  // A specular highlight on the curved glass: a small, crisp core of radius r
+  // (the portal), a tight highlight that bends with the corner of the tube,
+  // and a faint second reflection from the inner surface of the glass.
   float tvGlint(vec2 d, float r, float t) {
-    vec2 a = vec2(d.x + d.y, d.y - d.x) * 0.70710678;
-    float dl = length(d);
-    float core = 1.0 - smoothstep(r * 0.97, r, dl);
+    vec2 a = vec2(d.x - d.y, d.x + d.y) * 0.70710678;
+    a.y += a.x * a.x * 1.4;
+    float core = 1.0 - smoothstep(r * 0.92, r, length(d));
     float el = length(vec2(a.x / 1.7, a.y));
-    float halo = exp(-pow(max(el - r * 0.9, 0.0) / (r * 0.55), 2.0)) * 0.85
-               + exp(-max(el - r, 0.0) / (r * 2.2)) * 0.18;
-    float tw = 0.85 + 0.15 * sin(t * 2.3) * sin(t * 1.7 + 1.0);
-    float streak = exp(-abs(a.y) * 90.0 / (1.0 + abs(a.x) * 4.0)) * exp(-abs(a.x) / (r * 3.2)) * 0.9
-                 + exp(-abs(a.x) * 110.0) * exp(-abs(a.y) / (r * 1.4)) * 0.45;
-    return clamp(max(core, (halo + streak) * tw), 0.0, 1.0);
+    float hot = exp(-pow(max(el - r * 0.85, 0.0) / (r * 0.38), 2.0));
+    float halo = exp(-el / (r * 2.2)) * 0.12;
+    vec2 d2 = d + vec2(0.13, 0.1);
+    float ghost = exp(-pow(length(d2) / (r * 0.45), 2.0)) * 0.35;
+    float tw = 0.95 + 0.05 * sin(t * 1.3);
+    return clamp(max(core, (hot * 0.95 + halo + ghost) * tw), 0.0, 1.0);
   }
 `
 
