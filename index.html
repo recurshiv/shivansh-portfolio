@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shivansh Pratap Singh</title>
+    <meta
+      name="description"
+      content="Shivansh Pratap Singh: CS student and teaching assistant. Web apps and how software works closer to the machine."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Pick the layout before first paint. The 3D journey needs a wide screen,
+      // motion allowed and WebGL; everything else gets the linear layout.
+      ;(function () {
+        var root = document.documentElement
+        var wide = window.matchMedia('(min-width: 960px) and (min-height: 560px)').matches
+        var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        var gl = false
+        try {
+          var c = document.createElement('canvas')
+          gl = !!(c.getContext('webgl2') || c.getContext('webgl'))
+        } catch (e) {}
+        var forced = /[?&]mode=linear\b/.test(location.search)
+        root.classList.add(wide && !still && gl && !forced ? 'journey' : 'linear')
+      })()
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#work-index">Skip to the project list</a>
+
+    <header class="masthead">
+      <a class="mark" href="#intro" aria-label="Shivansh Pratap Singh, back to the top">
+        <span class="mark__lens" aria-hidden="true"></span>
+        <span class="mark__text">S. P. Singh</span>
+      </a>
+      <nav class="masthead__nav" aria-label="Primary">
+        <div class="allwork">
+          <button class="allwork__toggle" type="button" aria-expanded="false" aria-controls="allwork-panel">
+            View all work <span aria-hidden="true">+</span>
+          </button>
+          <div class="allwork__panel" id="allwork-panel" hidden>
+            <p class="micro">Four projects</p>
+            <ol class="allwork__list">
+              <li>
+                <a href="https://syncdocs-lut9.onrender.com/" target="_blank" rel="noopener">SyncDocs <span aria-hidden="true">↗</span></a>
+                <a class="allwork__jump" href="#syncdocs">Scene 01</a>
+              </li>
+              <li>
+                <a href="https://github.com/recurshiv/clipboard_sync" target="_blank" rel="noopener">Universal Clipboard Sync <span aria-hidden="true">↗</span></a>
+                <a class="allwork__jump" href="#clipboard">Scene 02</a>
+              </li>
+              <li>
+                <a href="https://final-transmission.vercel.app" target="_blank" rel="noopener">Final Transmission <span aria-hidden="true">↗</span></a>
+                <a class="allwork__jump" href="#final-transmission">Scene 03</a>
+              </li>
+              <li>
+                <a href="https://still-pavilion.vercel.app" target="_blank" rel="noopener">Still Pavilion <span aria-hidden="true">↗</span></a>
+                <a class="allwork__jump" href="#still-pavilion">Scene 04</a>
+              </li>
+            </ol>
+          </div>
+        </div>
+        <a href="#about">About</a>
+        <a href="https://github.com/recurshiv" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+
+    <canvas class="stage-canvas" aria-hidden="true"></canvas>
+
+    <ol class="rail" aria-hidden="true">
+      <li data-rail="0"><span>Intro</span></li>
+      <li data-rail="1"><span>SyncDocs</span></li>
+      <li data-rail="2"><span>Clipboard</span></li>
+      <li data-rail="3"><span>Final Transmission</span></li>
+      <li data-rail="4"><span>Still Pavilion</span></li>
+      <li data-rail="5"><span>About</span></li>
+    </ol>
+
+    <main id="journey">
+      <section class="stage hero" id="intro" data-stage="hero" aria-labelledby="hero-title">
+        <div class="hero__inner">
+          <div class="hero__copy">
+            <p class="micro hero__eyebrow">Portfolio · Engineering and frontend work</p>
+            <h1 id="hero-title" class="hero__title">
+              <span>Shivansh</span>
+              <span>Pratap <em>Singh</em></span>
+            </h1>
+            <p class="hero__intro">
+              I’m Shivansh Pratap Singh, a CS student and teaching assistant. I build web apps and study how
+              software works closer to the machine.
+            </p>
+            <p class="hero__cue micro journey-only"><span aria-hidden="true">↓</span> Scroll to fall into the glass</p>
+          </div>
+          <figure class="instrument-fallback linear-only" aria-hidden="true">
+            <div class="instrument-fallback__ring">
+              <div class="instrument-fallback__glass">
+                <img src="/media/syncdocs-page.webp" alt="" width="1200" height="1057" />
+              </div>
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <div class="stage transit" data-stage="t1" aria-hidden="true"></div>
+
+      <section class="stage project" id="syncdocs" data-stage="p1" aria-labelledby="syncdocs-title">
+        <div class="card-wrap">
+        <article class="card">
+          <p class="micro card__eyebrow">01 · Lead project · Full stack</p>
+          <h2 id="syncdocs-title" class="card__title">SyncDocs</h2>
+          <p class="card__lede">
+            A rich-text document editor built with MongoDB, Express, React and Node, the groundwork for
+            collaborative writing. Its focus is never losing work.
+          </p>
+          <ul class="card__facts">
+            <li>Autosave shows “Saved” only after the server confirms; failed saves keep your edits and can be retried.</li>
+            <li>Revision checks reject a stale save instead of overwriting newer text from another tab.</li>
+            <li>Server-side sessions, owner-only documents, and a 24-check end-to-end browser test.</li>
+          </ul>
+          <p class="card__note">Next step: real-time co-editing with Yjs. Today, one editor works on a document at a time.</p>
+          <div class="card__actions">
+            <a class="btn btn--primary" href="https://syncdocs-lut9.onrender.com/" target="_blank" rel="noopener">
+              Open live app <span aria-hidden="true">↗</span>
+            </a>
+            <a class="btn btn--quiet" href="https://github.com/recurshiv/syncdocs" target="_blank" rel="noopener">Source</a>
+          </div>
+          <p class="card__small">Free hosting: the first load after a quiet spell can take up to a minute.</p>
+          <figure class="card__media linear-only">
+            <img src="/media/syncdocs-editor.webp" alt="The SyncDocs editor with a lesson plan open and a green Saved status." loading="lazy" width="1600" height="1125" />
+            <figcaption>Live app capture: the editor.</figcaption>
+          </figure>
+        </article>
+        </div>
+      </section>
+
+      <div class="stage transit" data-stage="t2" aria-hidden="true"></div>
+
+      <section class="stage project" id="clipboard" data-stage="p2" aria-labelledby="clipboard-title">
+        <div class="card-wrap">
+        <article class="card">
+          <p class="micro card__eyebrow">02 · Hackathon team project</p>
+          <h2 id="clipboard-title" class="card__title">Universal Clipboard Sync</h2>
+          <p class="card__lede">
+            An Electron desktop app that sends copied text and images between paired computers over a WebRTC data
+            channel, with a small Node signaling server for pairing. Built with my hackathon team.
+          </p>
+          <h3 class="card__sub">Follow-up work in my fork</h3>
+          <ul class="card__facts">
+            <li>Pairing bound to the registered device, with one-time codes and attempt limits.</li>
+            <li>Bounded transfers: 32 KiB text, 10 MiB images in 12 KiB chunks, with send backpressure.</li>
+            <li>Disconnect that stays disconnected and closes the peer; 57 automated tests.</li>
+          </ul>
+          <p class="card__note">Two-machine testing on real hardware is still to do. The scene here is an illustration.</p>
+          <div class="card__actions">
+            <a class="btn btn--primary" href="https://github.com/recurshiv/clipboard_sync" target="_blank" rel="noopener">
+              View GitHub fork <span aria-hidden="true">↗</span>
+            </a>
+            <a class="btn btn--quiet" href="https://github.com/ZairaAk/clipboard_sync" target="_blank" rel="noopener">Team’s original repo</a>
+          </div>
+          <figure class="card__media card__media--diagram linear-only" aria-hidden="true">
+            <div class="diagram">
+              <span class="diagram__device">Desktop A</span>
+              <span class="diagram__signal"></span>
+              <span class="diagram__device">Desktop B</span>
+            </div>
+          </figure>
+        </article>
+        </div>
+      </section>
+
+      <div class="stage transit" data-stage="t3" aria-hidden="true"></div>
+
+      <section class="stage project" id="final-transmission" data-stage="p3" aria-labelledby="ft-title">
+        <div class="card-wrap">
+        <article class="card">
+          <p class="micro card__eyebrow">03 · Frontend experiment</p>
+          <h2 id="ft-title" class="card__title">Final Transmission</h2>
+          <p class="card__lede">
+            A cinematic landing page set in the year 3027: a damaged Earth in orbit, a ring of debris, and a
+            mission-control interface that reacts as you move.
+          </p>
+          <p class="card__body">A study in atmosphere, display typography and real-time 3D, built with React Three Fiber.</p>
+          <div class="card__actions">
+            <a class="btn btn--primary" href="https://final-transmission.vercel.app" target="_blank" rel="noopener">
+              Visit live site <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          <figure class="card__media linear-only">
+            <img src="/media/final-transmission.webp" alt="Final Transmission: a dark green Earth with an orange orbital ring next to the title." loading="lazy" width="1600" height="1000" />
+            <figcaption>Live site capture.</figcaption>
+          </figure>
+        </article>
+        </div>
+      </section>
+
+      <div class="stage transit transit--long" data-stage="t4" aria-hidden="true"></div>
+
+      <section class="stage project project--long" id="still-pavilion" data-stage="p4" aria-labelledby="sp-title">
+        <div class="card-wrap">
+        <article class="card">
+          <p class="micro card__eyebrow">04 · Frontend experiment</p>
+          <h2 id="sp-title" class="card__title">Still Pavilion</h2>
+          <p class="card__lede">
+            A quiet architectural study. You explore a small pavilion by scrolling and dragging, and switch its
+            material and the time of day.
+          </p>
+          <p class="card__body">Concrete, glass or metal; morning, noon or dusk. Built with React Three Fiber. Nothing to rush.</p>
+          <div class="card__actions">
+            <a class="btn btn--primary" href="https://still-pavilion.vercel.app" target="_blank" rel="noopener">
+              Visit live site <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          <figure class="card__media linear-only">
+            <img src="/media/still-pavilion.webp" alt="Still Pavilion: a pale stone pavilion with columns and a looping sculpture." loading="lazy" width="1600" height="1000" />
+            <figcaption>Live site capture.</figcaption>
+          </figure>
+        </article>
+        </div>
+      </section>
+
+      <section class="about" id="about" data-stage="about" aria-labelledby="about-title">
+        <div class="about__inner">
+          <p class="micro">About and contact</p>
+          <h2 id="about-title" class="about__title">A bit about me.</h2>
+          <div class="about__cols">
+            <p>
+              I study computer science at Scaler School of Technology and, alongside it, the IIT Madras BS in Data
+              Science. I work as a teaching assistant, and I qualified for the ICPC Regionals.
+            </p>
+            <p>
+              I like building web apps end to end, then tracing what happens underneath them: memory, processes,
+              the code closer to the machine. Most of that work lives on GitHub.
+            </p>
+          </div>
+          <div class="about__contact" id="work-index">
+            <a class="btn btn--primary" href="https://github.com/recurshiv" target="_blank" rel="noopener">
+              github.com/recurshiv <span aria-hidden="true">↗</span>
+            </a>
+            <ul class="about__work" aria-label="All four projects">
+              <li><a href="https://syncdocs-lut9.onrender.com/" target="_blank" rel="noopener">SyncDocs ↗</a></li>
+              <li><a href="https://github.com/recurshiv/clipboard_sync" target="_blank" rel="noopener">Universal Clipboard Sync ↗</a></li>
+              <li><a href="https://final-transmission.vercel.app" target="_blank" rel="noopener">Final Transmission ↗</a></li>
+              <li><a href="https://still-pavilion.vercel.app" target="_blank" rel="noopener">Still Pavilion ↗</a></li>
+            </ul>
+          </div>
+          <footer class="footer">
+            <span>Shivansh Pratap Singh</span>
+            <a href="#intro">Back to the top ↑</a>
+          </footer>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
