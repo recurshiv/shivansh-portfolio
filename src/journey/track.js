@@ -4,7 +4,7 @@ import * as THREE from 'three'
  * The camera path. Scroll gives a value g in [0, 9]: whole numbers are the
  * boundaries between segments, in DOM order:
  *
- *   0 hero dwell · 1 zoom into the static · 2 SyncDocs dwell · 3 into the copy glyph
+ *   0 hero dwell · 1 zoom into the glint · 2 SyncDocs dwell · 3 into the copy glyph
  *   4 Clipboard dwell · 5 along the signal into the display · 6 Final Transmission dwell
  *   7 through the bright opening · 8 Still Pavilion dwell
  *

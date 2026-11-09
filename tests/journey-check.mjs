@@ -57,18 +57,19 @@ const untouched = await p.evaluate(() => window.__journey.camera())
 const dBack = Math.hypot(...released.position.map((v, i) => v - untouched.position[i]), ...released.quaternion.map((v, i) => v - untouched.quaternion[i]))
 check('view eases back to centre after the pointer leaves', dBack < 1e-3, `pose Δ vs untouched ${dBack.toExponential(1)}`)
 
-// 2. TV screen: the pointer bends the static, a click degausses, the bright patch can be peeked through.
+// 2. TV screen: the pointer bends the static, a click degausses, the glint can be peeked through.
 const hero = () => p.evaluate(() => window.__journey.hero())
 await p.mouse.move(980, 500, { steps: 6 }); await p.waitForTimeout(1500)
 const onScreen = await hero()
 check('pointer on the TV screen bends the static', onScreen.mag > 0.8, `magnet ${onScreen.mag.toFixed(2)}`)
-await p.mouse.click(980, 500); await p.waitForTimeout(150)
-const clicked = await hero()
+await p.mouse.click(980, 500)
+// Read the state on the first frame after the click; slow software frames can take longer than a fixed wait.
+const clicked = await (await p.waitForFunction((prev) => { const h = window.__journey.hero(); return h.channel !== prev ? h : false }, onScreen.channel, { polling: 'raf', timeout: 5000 }).catch(() => null))?.jsonValue() ?? await hero()
 check('a click degausses the tube and turns the channel dial', clicked.channel === onScreen.channel + 1 && clicked.degauss > 0.05, `channel ${onScreen.channel}→${clicked.channel}, degauss ${clicked.degauss.toFixed(2)}`)
 const [sx, sy] = await p.evaluate(() => window.__journey.state.spot)
 await p.mouse.move(sx, sy, { steps: 6 }); await p.waitForTimeout(2200); const G1 = await shot('peek-on')
 const peek = await hero()
-check('hovering the bright patch opens a peek through it', peek.hover > 0.8, `hover ${peek.hover.toFixed(2)}`)
+check('hovering the glint opens a peek through it', peek.hover > 0.8, `hover ${peek.hover.toFixed(2)}`)
 await p.mouse.move(700, 820, { steps: 6 }); await p.waitForTimeout(2200); const G0 = await shot('peek-off')
 const off = await hero()
 check('moving away closes the peek and releases the magnet', off.hover < 0.1 && off.mag < 0.1, `hover ${off.hover.toFixed(2)}, magnet ${off.mag.toFixed(2)}`)

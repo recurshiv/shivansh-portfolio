@@ -70,10 +70,6 @@ const screenFragment = /* glsl */ `
     float n = mix(tvStatic(q, uTime), 0.5, zoom);
     vec3 col = vec3(0.012 + 0.42 * n * n);
 
-    // The static thins into a bright patch, which is the way through.
-    float sd = length(vPos - uSpot);
-    float glow = 1.0 - smoothstep(uSpotR * 0.98, uSpotR * 3.4, sd);
-    col = mix(col, tvPatch(n), glow * glow);
     col *= tvShade(vPos, uTime, uHalf, zoom);
 
     float a = atan(dm.y, dm.x);
@@ -81,6 +77,9 @@ const screenFragment = /* glsl */ `
     col = mix(col, col * ring * 1.9, mf * 0.8);
     vec3 wash = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + vPos.x * 0.25 + vPos.y * 0.15 + uTime * 1.5));
     col = mix(col, col * wash * 1.8, uDegauss * 0.8);
+
+    // A glint on the glass, which is the way through.
+    col = mix(col, tvGlintColor(), tvGlint(vPos - uSpot, uSpotR, uTime));
 
     // Power on: a bright line opens into the picture.
     float w = smoothstep(0.0, 0.35, uOn);
@@ -207,8 +206,8 @@ function buildCRT(env) {
     uMagOn: { value: 0 },
     uDegauss: { value: 0 },
     uHalf: { value: new THREE.Vector2(SW / 2, SH / 2) },
-    uSpot: { value: new THREE.Vector2(0.62, 0.32) },
-    uSpotR: { value: 0.42 },
+    uSpot: { value: new THREE.Vector2(1.36, 0.98) },
+    uSpotR: { value: 0.16 },
     uMag: { value: new THREE.Vector2(0, 0) },
   }
   const screen = new THREE.Mesh(
@@ -335,7 +334,7 @@ function buildCRT(env) {
     tv.add(ear)
   }
 
-  // The bright patch in the static is the portal into SyncDocs.
+  // The glint in the top-right corner of the glass is the portal into SyncDocs.
   const PR = su.uSpotR.value
   const portal = createPortal({ shape: 'circle', radius: PR, smoke: 0, tint: '#fffaf0', rim: 0, sheen: 0, static: true })
   portal.mesh.position.set(SC.x + su.uSpot.value.x, SC.y + su.uSpot.value.y, 0.003)

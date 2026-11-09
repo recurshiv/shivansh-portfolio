@@ -35,8 +35,22 @@ export const STATIC_GLSL = /* glsl */ `
     float roll = 0.92 + 0.08 * smoothstep(0.6, 1.0, sin(q.y * 1.7 - t * 1.6));
     return (0.84 + 0.16 * mix(sin(q.y * 220.0), 1.0, zoom)) * roll * vig;
   }
-  vec3 tvPatch(float n) {
-    return vec3(1.0, 0.985, 0.95) * (0.86 + 0.14 * n);
+  vec3 tvGlintColor() {
+    return vec3(1.0, 0.99, 0.965);
+  }
+  // A reflection on the curved glass: a round hot core of radius r (the portal),
+  // a halo stretched along the corner diagonal, and two thin light streaks.
+  float tvGlint(vec2 d, float r, float t) {
+    vec2 a = vec2(d.x + d.y, d.y - d.x) * 0.70710678;
+    float dl = length(d);
+    float core = 1.0 - smoothstep(r * 0.97, r, dl);
+    float el = length(vec2(a.x / 1.7, a.y));
+    float halo = exp(-pow(max(el - r * 0.9, 0.0) / (r * 0.55), 2.0)) * 0.85
+               + exp(-max(el - r, 0.0) / (r * 2.2)) * 0.18;
+    float tw = 0.85 + 0.15 * sin(t * 2.3) * sin(t * 1.7 + 1.0);
+    float streak = exp(-abs(a.y) * 90.0 / (1.0 + abs(a.x) * 4.0)) * exp(-abs(a.x) / (r * 3.2)) * 0.9
+                 + exp(-abs(a.x) * 110.0) * exp(-abs(a.y) / (r * 1.4)) * 0.45;
+    return clamp(max(core, (halo + streak) * tw), 0.0, 1.0);
   }
 `
 
@@ -107,15 +121,11 @@ const fragmentShader = /* glsl */ `
     col *= 1.0 - 0.3 * smoothstep(0.45, 1.0, e) * uFade * uRim;
     col = mix(col, uRimColor, smoothstep(0.93, 1.0, e) * 0.35 * uRim * uFade);
 
-    // The CRT's bright patch: the same static as the screen around it,
-    // so the aperture edge disappears into the picture until the camera is close.
+    // The CRT's glint: a small bright reflection on the glass, the same white
+    // as the screen draws around it, so its edge disappears until the camera is close.
     if (uStatic > 0.5) {
-      vec2 q = uSpot + L * uSpotR;
-      float zoom = tvZoom(q);
-      float n = mix(tvStatic(q, uTime), 0.5, zoom);
-      vec3 patchCol = tvPatch(n) * tvShade(q, uTime, uScreenHalf, zoom);
       float amt = uFade * (1.0 - lens) * mix(0.8, 1.0, smoothstep(0.3, 1.0, e));
-      col = mix(col, patchCol, amt);
+      col = mix(col, tvGlintColor(), amt);
       col = mix(vec3(0.018, 0.02, 0.024), col, uPower);
     }
 

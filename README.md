@@ -1,6 +1,6 @@
 # Shivansh Pratap Singh: portfolio
 
-A single-page portfolio built as one continuous, reversible camera move. On desktop, scrolling zooms into the bright patch in a vintage TV's static and comes out on the SyncDocs page. From there it goes through the copy glyph into Universal Clipboard Sync, into the received image on the second laptop for Final Transmission, and through a bright patch of cloud on the planet into Still Pavilion. The page ends with a quiet About section.
+A single-page portfolio built as one continuous, reversible camera move. On desktop, scrolling zooms into a glint of light on a vintage TV's glass and comes out on the SyncDocs page. From there it goes through the copy glyph into Universal Clipboard Sync, into the received image on the second laptop for Final Transmission, and through a bright patch of cloud on the planet into Still Pavilion. The page ends with a quiet About section.
 
 ## Run
 
@@ -15,13 +15,13 @@ The build output is a plain static site, so it can be hosted anywhere.
 
 ## How the journey works
 
-- **Nested worlds joined by portals** (`src/journey/worlds.js`). Each world contains the next one at a position, rotation and scale. The bridge object (the bright patch in the TV static, the copy glyph, the received-image preview on the second laptop, the bright spot on the planet) is a portal. The next world is rendered into a texture by a camera mapped through that embedding, and the portal samples it in screen space. The real next scene is therefore visible inside the bridge object from the start.
+- **Nested worlds joined by portals** (`src/journey/worlds.js`). Each world contains the next one at a position, rotation and scale. The bridge object (the glint on the TV glass, the copy glyph, the received-image preview on the second laptop, the bright spot on the planet) is a portal. The next world is rendered into a texture by a camera mapped through that embedding, and the portal samples it in screen space. The real next scene is therefore visible inside the bridge object from the start.
 - **Seamless crossing** (`src/journey/index.js`). When the camera reaches the portal plane, the portal fills the whole view, and rendering switches to the inner world at the equivalent pose. There is no cut, and no scene jump.
 - **Camera path** (`src/journey/track.js`). Scroll maps to a value `g` from 0 to 9: hero, four transitions, four reading dwells. In a transition, the distance to the target object is interpolated in log space, which keeps a constant zoom rate and reads as falling. Each pose is a pure function of `g`, so scrolling back retraces the path exactly.
 - **Portal shader** (`src/journey/portal.js`). It adds smoke, a cobalt rim with edge refraction, and a sheen that follows the viewing angle. A pointer lens clears the smoke, magnifies, and splits colour, and the effect is confined to the aperture.
-- **The TV** (`buildCRT` in `src/journey/worlds.js`). The screen is a shader of live static with scanlines, a rolling bar and dark tube corners. Its bright patch is the portal, and it draws the same static, so the edge disappears into the picture. Up close, the grain smooths out, so the zoom melts into white before the SyncDocs page appears.
+- **The TV** (`buildCRT` in `src/journey/worlds.js`). The screen is a shader of live static with scanlines, a rolling bar and dark tube corners. A small reflection in its top-right corner is the portal; the screen draws the same white around it, so the edge disappears. Up close, the grain smooths out, so the zoom melts into white before the SyncDocs page appears.
 - **Pointer look-around.** The camera orbits its focus point slightly, and the orbit is stronger on the hero. It eases back to centre when the pointer leaves. Scroll alone decides progress.
-- **The TV screen.** It powers on with a bright line when the page loads. The pointer bends the static like a magnet held to the tube, with colour fringes. A click degausses the picture and turns the channel dial. Hovering the bright patch lets you peek at the page behind it.
+- **The TV screen.** It powers on with a bright line when the page loads. The pointer bends the static like a magnet held to the tube, with colour fringes. A click degausses the picture and turns the channel dial. Hovering the glint lets you peek at the page behind it.
 - **Scene interactions** (the cursor labels each one):
   - SyncDocs: click to type a line and watch the autosave states (Unsaved changes, then Saving…, then Saved).
   - Clipboard Sync: click to copy something new; the clip flies to the other laptop and its screen updates.
@@ -54,7 +54,7 @@ The build output is a plain static site, so it can be hosted anywhere.
 
 `tests/journey-check.mjs` drives headless Chromium with software WebGL against `npm run preview`. It checks:
 
-- the look-around, the magnet effect on the TV screen, the degauss click and the peek through the bright patch, with the text unchanged;
+- the look-around, the magnet effect on the TV screen, the degauss click and the peek through the glint, with the text unchanged;
 - easing back to centre;
 - reversal at four points, comparing pose and image;
 - keyboard reach of every project link;
