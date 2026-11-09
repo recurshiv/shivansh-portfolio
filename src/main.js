@@ -61,20 +61,72 @@ panel.addEventListener('click', (e) => {
   if (e.target.closest('a')) setPanel(false)
 })
 
-// Simple layout on a capable desktop: offer the 3D journey.
-document.querySelector('.journey-offer__btn')?.addEventListener('click', () => {
-  try {
-    localStorage.setItem('journey', 'on')
-  } catch (e) {}
-  const url = new URL(location.href)
-  url.searchParams.set('mode', 'journey')
-  location.replace(url)
-})
-// A window that was too narrow switches to the journey once it is wide enough.
-if (root.dataset.why === 'narrow') {
-  const mq = window.matchMedia('(min-width: 960px) and (min-height: 560px)')
+// Phones and small windows: a "desktop required" page.
+if (root.classList.contains('phone')) {
+  // A window that is merely too small switches to the journey once it is big enough.
+  const mq = window.matchMedia('(min-width: 960px) and (min-height: 500px)')
   mq.addEventListener('change', (e) => e.matches && location.reload())
+  const share = document.querySelector('.desk__share')
+  const note = document.querySelector('.desk__copied')
+  const url = location.origin + location.pathname
+  if (navigator.share) share.textContent = 'Share this link'
+  else share.textContent = 'Copy this link'
+  share.addEventListener('click', async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Shivansh Pratap Singh: portfolio', url })
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      note.textContent = 'Link copied. Open it on a desktop.'
+    } catch (e) {
+      if (e?.name !== 'AbortError') note.textContent = url
+    }
+  })
 }
+
+// Hardware acceleration notice: a software renderer, no WebGL, or a slow first few seconds.
+const gpuNote = document.querySelector('.gpu-note')
+function dismissed() {
+  try {
+    return sessionStorage.getItem('gpu-note') === 'off'
+  } catch (e) {
+    return false
+  }
+}
+function showGpuNote(reason) {
+  if (dismissed() || root.classList.contains('phone')) return
+  const why = gpuNote.querySelector('.gpu-note__why')
+  if (reason === 'none') why.textContent = 'Your browser cannot draw 3D right now, so this is the simple version.'
+  else if (reason === 'slow') why.textContent = 'The 3D is running slowly; turning it on usually fixes that.'
+  else why.textContent = 'The 3D will stutter without it.'
+  gpuNote.hidden = false
+}
+const isEdge = /Edg\//.test(navigator.userAgent)
+const addr = isEdge ? 'edge://settings/system' : 'chrome://settings/system'
+gpuNote.querySelector('.gpu-note__addr').textContent = addr
+const more = gpuNote.querySelector('.gpu-note__more')
+more.addEventListener('click', () => {
+  const open = more.getAttribute('aria-expanded') !== 'true'
+  more.setAttribute('aria-expanded', String(open))
+  gpuNote.querySelector('.gpu-note__steps').hidden = !open
+})
+gpuNote.querySelector('.gpu-note__copy').addEventListener('click', async (e) => {
+  try {
+    await navigator.clipboard.writeText(addr)
+    e.target.textContent = 'Copied'
+  } catch (err) {
+    e.target.textContent = 'Copy failed'
+  }
+})
+gpuNote.querySelector('.gpu-note__close').addEventListener('click', () => {
+  gpuNote.hidden = true
+  try {
+    sessionStorage.setItem('gpu-note', 'off')
+  } catch (e) {}
+})
+if (root.dataset.gpu) showGpuNote(root.dataset.gpu)
+document.addEventListener('journey:slow', () => showGpuNote('slow'))
 
 if (root.classList.contains('journey')) {
   import('./journey/index.js')

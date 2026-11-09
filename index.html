@@ -16,32 +16,86 @@
       rel="stylesheet"
     />
     <script>
-      // Pick the layout before first paint. The 3D journey needs a wide screen,
-      // motion allowed and WebGL; everything else gets the linear layout.
+      // Pick the layout before first paint:
+      //   phone   - screens too small for the 3D journey get a "desktop required" page;
+      //   journey - the default on any desktop with WebGL;
+      //   linear  - the readable fallback when WebGL is unavailable (or ?mode=linear).
+      // data-gpu marks a software renderer or missing WebGL, so the page can
+      // suggest turning on hardware acceleration.
       ;(function () {
         var root = document.documentElement
-        var wide = window.matchMedia('(min-width: 960px) and (min-height: 560px)').matches
-        var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        var gl = false
+        var q = location.search
+        var big = window.matchMedia('(min-width: 960px) and (min-height: 500px)').matches
+        var gpu = 'none'
         try {
           var c = document.createElement('canvas')
-          gl = !!(c.getContext('webgl2') || c.getContext('webgl'))
+          var ctx = c.getContext('webgl2') || c.getContext('webgl')
+          if (ctx) {
+            gpu = 'ok'
+            var info = ctx.getExtension('WEBGL_debug_renderer_info')
+            var name = String(ctx.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : ctx.RENDERER))
+            if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(name)) gpu = 'software'
+            var lose = ctx.getExtension('WEBGL_lose_context')
+            if (lose) lose.loseContext()
+          }
         } catch (e) {}
-        var forced = /[?&]mode=linear\b/.test(location.search)
-        // Visitors who prefer reduced motion can still opt in to the 3D journey.
-        var optIn = /[?&]mode=journey\b/.test(location.search)
-        try {
-          optIn = optIn || localStorage.getItem('journey') === 'on'
-        } catch (e) {}
-        var journey = wide && gl && !forced && (!still || optIn)
-        root.classList.add(journey ? 'journey' : 'linear')
-        // Why the simple layout is showing, so the page can offer the right fix.
-        if (!journey && gl && !forced) root.dataset.why = !wide ? 'narrow' : 'motion'
+        var mode
+        if (/[?&]mode=linear\b/.test(q)) mode = 'linear'
+        else if (!big && !/[?&]mode=journey\b/.test(q)) mode = 'phone'
+        else mode = gpu === 'none' ? 'linear' : 'journey'
+        root.classList.add(mode)
+        if (gpu !== 'ok') root.dataset.gpu = gpu
       })()
     </script>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <section class="desk" aria-labelledby="desk-title">
+      <figure class="crt-fallback desk__tv" aria-hidden="true">
+        <div class="crt-fallback__cabinet">
+          <div class="crt-fallback__screen"><span class="crt-fallback__static"></span></div>
+          <div class="crt-fallback__panel"><i></i><i></i></div>
+        </div>
+      </figure>
+      <p class="micro">Portfolio · Desktop required</p>
+      <h1 id="desk-title" class="desk__title">Shivansh Pratap <em>Singh</em></h1>
+      <p class="desk__lede">
+        This portfolio is a 3D journey built for a big screen. Open it on a laptop or desktop<span class="desk__widen">, or make this window wider</span>.
+      </p>
+      <button class="btn btn--primary desk__share" type="button">Send me this link</button>
+      <p class="desk__copied micro" aria-live="polite"></p>
+      <div class="desk__work">
+        <p class="micro">Meanwhile, the projects</p>
+        <ul>
+          <li><a href="https://syncdocs-lut9.onrender.com/" target="_blank" rel="noopener">SyncDocs ↗</a></li>
+          <li><a href="https://github.com/recurshiv/clipboard_sync" target="_blank" rel="noopener">Universal Clipboard Sync ↗</a></li>
+          <li><a href="https://final-transmission.vercel.app" target="_blank" rel="noopener">Final Transmission ↗</a></li>
+          <li><a href="https://still-pavilion.vercel.app" target="_blank" rel="noopener">Still Pavilion ↗</a></li>
+          <li><a href="https://github.com/recurshiv" target="_blank" rel="noopener">github.com/recurshiv ↗</a></li>
+        </ul>
+      </div>
+    </section>
+
+    <aside class="gpu-note" hidden aria-label="Hardware acceleration">
+      <div class="gpu-note__row">
+        <p class="gpu-note__text"><strong>Hardware acceleration looks off.</strong> <span class="gpu-note__why">The 3D will stutter without it.</span></p>
+        <button class="gpu-note__more" type="button" aria-expanded="false" aria-controls="gpu-steps">How to fix</button>
+        <button class="gpu-note__close" type="button" aria-label="Dismiss">×</button>
+      </div>
+      <div class="gpu-note__steps" id="gpu-steps" hidden>
+        <ol>
+          <li>
+            <b>Chrome, Edge, Brave, Opera:</b> open <code class="gpu-note__addr">chrome://settings/system</code>
+            <button class="gpu-note__copy" type="button">Copy</button> in a new tab, turn on “Use graphics acceleration
+            when available”, then press Relaunch.
+          </li>
+          <li><b>Firefox:</b> Settings → General → Performance. Untick “Use recommended performance settings”, tick “Use hardware acceleration when available”, then restart Firefox.</li>
+          <li><b>Safari:</b> it is always on. Turning off Low Power Mode can help.</li>
+        </ol>
+        <p>Then reload this page.</p>
+      </div>
+    </aside>
+
     <a class="skip" href="#work-index">Skip to the project list</a>
 
     <header class="masthead">
@@ -124,11 +178,6 @@
               <div class="crt-fallback__panel"><i></i><i></i></div>
             </div>
           </figure>
-          <div class="journey-offer linear-only">
-            <p class="journey-offer__narrow">Widen the window to at least 960px for the 3D version of this page.</p>
-            <p class="journey-offer__motion">You have reduced motion turned on, so this is the simple version.</p>
-            <button class="journey-offer__btn" type="button">Turn on the 3D journey</button>
-          </div>
         </div>
       </section>
 

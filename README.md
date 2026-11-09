@@ -34,12 +34,11 @@ The build output is a plain static site, so it can be hosted anywhere.
 
 `index.html` picks the layout before first paint:
 
-- **Journey:** a viewport at least 960 × 560, motion allowed, and WebGL available.
-- **Linear:** everything else, meaning phones, `prefers-reduced-motion`, or no WebGL. It is a readable column with real captures, and Three.js is never downloaded.
-- **Opting in or switching:**
-  - With reduced motion on, a "Turn on the 3D journey" button opts in. The choice is remembered.
-  - A window that is too narrow shows a hint, and switches to the journey once it is wide enough.
-  - `?mode=linear` forces the linear layout, and `?mode=journey` forces the journey.
+- **Journey (default):** any screen at least 960 × 500 with WebGL. The reduced-motion setting does not switch it off.
+- **Desktop required:** phones and smaller windows. The page shows the name, a share or copy-link button, and direct links to the four projects and GitHub. A window that is widened switches to the journey.
+- **Linear:** the readable fallback when WebGL is unavailable, or when forced with `?mode=linear`. Three.js is never downloaded. `?mode=journey` forces the journey, even on a small screen.
+
+**Hardware acceleration notice.** The page asks WebGL which renderer it is using. A software renderer (SwiftShader, llvmpipe, Microsoft Basic Render), missing WebGL, or under 24 fps over the first four seconds shows a small notice. It explains how to turn acceleration on in Chrome, Edge, Firefox and Safari, and has a button that copies the settings address. A page cannot change the setting itself. Dismissing the notice hides it for the session.
 
 **View all work** in the header links straight to all four live projects, and to each scene.
 
@@ -59,7 +58,7 @@ The build output is a plain static site, so it can be hosted anywhere.
 - reversal at four points, comparing pose and image;
 - keyboard reach of every project link;
 - the View all work panel and its shortcut jumps;
-- mobile, reduced-motion and no-WebGL layouts, including no horizontal scroll.
+- the desktop-required phone page, the journey under reduced motion, the hardware acceleration notice, and the linear and no-WebGL layouts.
 
 ```bash
 cd tests && npm install && npx playwright install chromium

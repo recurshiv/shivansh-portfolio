@@ -177,7 +177,19 @@ export async function start() {
 
   let lensHover = 0
   let focusNow = 1
+  // Frame-rate probe: if the first seconds run well under 30 fps, suggest hardware acceleration.
+  const probe = { start: 0, frames: 0, done: false }
   function frame(now) {
+    if (!probe.done && document.visibilityState === 'visible') {
+      if (!probe.start) probe.start = now
+      probe.frames++
+      if (now - probe.start > 4000) {
+        probe.done = true
+        const fps = (probe.frames * 1000) / (now - probe.start)
+        state.fps = fps
+        if (fps < 24) document.dispatchEvent(new CustomEvent('journey:slow'))
+      }
+    }
     lensHover = 0
     // rAF timestamps can precede performance.now() taken at startup; never go negative.
     const rawDt = Math.min(0.5, Math.max(0, (now - last) / 1000))

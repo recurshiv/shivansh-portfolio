@@ -166,12 +166,9 @@ for (const [w, h] of [[1440, 900], [1366, 768], [1280, 720]]) {
   await c.close()
 }
 
-// ---------- Linear layouts ----------
-for (const [name, opts] of [
-  ['mobile', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }],
-  ['reduced-motion', { viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' }],
-]) {
-  const c = await b.newContext(opts)
+// ---------- Phone: desktop required ----------
+{
+  const c = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   const q = await c.newPage()
   const e2 = []
   q.on('pageerror', (e) => e2.push(String(e)))
@@ -179,24 +176,80 @@ for (const [name, opts] of [
   await q.waitForTimeout(800)
   const mode = await q.evaluate(() => document.documentElement.className)
   const three = await q.evaluate(() => performance.getEntriesByType('resource').some((r) => r.name.includes('journey')))
-  check(`${name}: linear layout, Three.js not loaded`, mode.includes('linear') && !three, `class=${mode}`)
-  const overflow = await q.evaluate(() => document.documentElement.scrollWidth > innerWidth)
-  check(`${name}: no horizontal scroll`, !overflow)
-  const headings = await q.$$eval('h1, h2', (hs) => hs.map((h) => h.textContent.trim().replace(/\s+/g, ' ')))
-  check(`${name}: all sections readable in order`, headings.join(' | ') === 'Shivansh Pratap Singh | SyncDocs | Universal Clipboard Sync | Final Transmission | Still Pavilion | A bit about me.', headings.join(' | '))
-  const small = await q.$$eval('p, li, a', (els) => els.filter((e) => e.offsetParent && parseFloat(getComputedStyle(e).fontSize) < 11).length)
-  check(`${name}: no text under 11px`, small === 0, `${small} elements`)
-  await q.screenshot({ path: `${OUT}/${name}-full.png`, fullPage: true })
-  check(`${name}: no errors`, e2.length === 0, e2.join(' | '))
+  check('phone: "desktop required" page, Three.js not loaded', mode.includes('phone') && !three, `class=${mode}`)
+  const desk = await q.evaluate(() => {
+    const visible = (el) => !!el && el.getClientRects().length > 0
+    return {
+      title: document.querySelector('.desk h1')?.textContent.replace(/\s+/g, ' ').trim(),
+      says: /desktop required/i.test(document.querySelector('.desk').innerText),
+      links: [...document.querySelectorAll('.desk a')].filter(visible).map((a) => a.href),
+      main: visible(document.querySelector('main')),
+      share: visible(document.querySelector('.desk__share')),
+    }
+  })
+  check('phone: says desktop required, with name, share button and project links', desk.says && desk.title === 'Shivansh Pratap Singh' && desk.share && desk.links.length === 5 && !desk.main, JSON.stringify(desk))
+  check('phone: no horizontal scroll', !(await q.evaluate(() => document.documentElement.scrollWidth > innerWidth)))
+  const small = await q.$$eval('p, li, a, button', (els) => els.filter((e) => e.offsetParent && parseFloat(getComputedStyle(e).fontSize) < 11).length)
+  check('phone: no text under 11px', small === 0, `${small} elements`)
+  await q.screenshot({ path: `${OUT}/phone.png` })
+  check('phone: no errors', e2.length === 0, e2.join(' | '))
   await c.close()
 }
+
+// ---------- Reduced motion still gets the journey by default ----------
+{
+  const c = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+  const q = await c.newPage()
+  await q.goto(URL, { waitUntil: 'networkidle' })
+  await q.waitForFunction(() => window.__journey, null, { timeout: 15000 }).catch(() => {})
+  check('reduced motion: 3D journey is the default', (await q.evaluate(() => document.documentElement.className)).includes('journey'))
+  await c.close()
+}
+
+// ---------- Software renderer: hardware acceleration notice ----------
+{
+  const c = await b.newContext({ viewport: { width: 1440, height: 900 } })
+  const q = await c.newPage()
+  await q.goto(URL, { waitUntil: 'networkidle' })
+  await q.waitForTimeout(800)
+  const gpu = await q.evaluate(() => ({ gpu: document.documentElement.dataset.gpu, shown: !document.querySelector('.gpu-note').hidden }))
+  check('software renderer (SwiftShader here): hardware acceleration notice shows', gpu.gpu === 'software' && gpu.shown, JSON.stringify(gpu))
+  await q.click('.gpu-note__more')
+  const steps = await q.evaluate(() => !document.querySelector('.gpu-note__steps').hidden && document.querySelector('.gpu-note__addr').textContent)
+  check('notice: "How to fix" opens the steps with the settings address', steps === 'chrome://settings/system', String(steps))
+  await q.screenshot({ path: `${OUT}/gpu-note.png` })
+  await q.click('.gpu-note__close')
+  await q.reload({ waitUntil: 'networkidle' }); await q.waitForTimeout(500)
+  check('notice: dismissing it keeps it closed for the session', await q.evaluate(() => document.querySelector('.gpu-note').hidden))
+  await c.close()
+}
+
+// ---------- Linear fallback (?mode=linear) ----------
+{
+  const c = await b.newContext({ viewport: { width: 1440, height: 900 } })
+  const q = await c.newPage()
+  const e2 = []
+  q.on('pageerror', (e) => e2.push(String(e)))
+  await q.goto(URL + '?mode=linear', { waitUntil: 'networkidle' })
+  await q.waitForTimeout(800)
+  const mode = await q.evaluate(() => document.documentElement.className)
+  const three = await q.evaluate(() => performance.getEntriesByType('resource').some((r) => r.name.includes('journey')))
+  check('linear: readable layout, Three.js not loaded', mode.includes('linear') && !three, `class=${mode}`)
+  const headings = await q.$$eval('main h1, main h2', (hs) => hs.map((h) => h.textContent.trim().replace(/\s+/g, ' ')))
+  check('linear: all sections readable in order', headings.join(' | ') === 'Shivansh Pratap Singh | SyncDocs | Universal Clipboard Sync | Final Transmission | Still Pavilion | A bit about me.', headings.join(' | '))
+  check('linear: no horizontal scroll', !(await q.evaluate(() => document.documentElement.scrollWidth > innerWidth)))
+  check('linear: no errors', e2.length === 0, e2.join(' | '))
+  await c.close()
+}
+
 // No WebGL.
 {
   const c = await b.newContext({ viewport: { width: 1440, height: 900 } })
   await c.addInitScript(() => { const o = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t, ...a) { return /webgl/.test(t) ? null : o.call(this, t, ...a) } })
   const q = await c.newPage()
   await q.goto(URL, { waitUntil: 'networkidle' })
-  check('no WebGL: linear layout', (await q.evaluate(() => document.documentElement.className)).includes('linear'))
+  const r = await q.evaluate(() => ({ cls: document.documentElement.className, note: !document.querySelector('.gpu-note').hidden }))
+  check('no WebGL: linear layout with the hardware acceleration notice', r.cls.includes('linear') && r.note, JSON.stringify(r))
   await q.screenshot({ path: `${OUT}/nowebgl.png` })
   await c.close()
 }
