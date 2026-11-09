@@ -526,7 +526,7 @@ a {
 }
 
 .journey .hero {
-  height: 150vh;
+  height: 120vh;
 }
 .journey .hero__inner {
   position: sticky;
@@ -543,17 +543,17 @@ a {
 }
 
 .journey .transit {
-  height: 230vh;
+  height: 80vh;
 }
 .journey .transit--long {
-  height: 300vh;
+  height: 110vh;
 }
 
 .journey .project {
-  height: 190vh;
+  height: 150vh;
 }
 .journey .project--long {
-  height: 270vh;
+  height: 180vh;
 }
 .journey .project .card-wrap {
   position: sticky;
